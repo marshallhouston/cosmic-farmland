@@ -7,11 +7,11 @@ set -euo pipefail
 #   project-dir: path to the Lovable project (default: current directory)
 #
 # What it does:
-#   1. Cleans up lockfiles — ensures Bun only (removes npm/yarn/pnpm artifacts)
+#   1. Cleans up lockfiles — ensures Bun only (removes npm/yarn/pnpm/bun binary artifacts)
 #   2. Adds production start script (bunx serve)
-#   3. Upgrades all dependencies to latest
+#   3. Reinstalls dependencies with Bun
 #   4. Sets up .gitignore and .railwayignore
-#   5. Creates CLAUDE.md scaffold
+#   5. Creates lean CLAUDE.md scaffold
 #   6. Builds to verify everything works
 #   7. Commits all setup changes
 #   8. Optionally creates Railway project + domain
@@ -43,15 +43,33 @@ command -v git >/dev/null 2>&1 || fail "git not found"
 [ -f package.json ] || fail "No package.json found in $PROJECT_DIR"
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || fail "Not a git repository"
 
-# ── 1. Clean up lockfiles — Bun only ─────────────────────────────────
-info "Cleaning up lockfiles (Bun only)..."
-rm -f package-lock.json yarn.lock pnpm-lock.yaml
-ok "Removed non-Bun lockfiles"
+# ── 1. Clean up lockfiles — Bun text lockfile only ───────────────────
+info "Cleaning up lockfiles..."
+rm -f package-lock.json yarn.lock pnpm-lock.yaml bun.lockb
+ok "Removed non-Bun and binary lockfiles"
 
-# ── 2. Add/fix production start script ────────────────────────────────
+# ── 2. .gitignore (write early so git add -A is safe) ────────────────
+info "Updating .gitignore..."
+GITIGNORE_ENTRIES=(".claude" "bun.lockb" "package-lock.json" "yarn.lock" "pnpm-lock.yaml")
+for entry in "${GITIGNORE_ENTRIES[@]}"; do
+  if ! grep -qxF "$entry" .gitignore 2>/dev/null; then
+    echo "$entry" >> .gitignore
+  fi
+done
+ok ".gitignore updated"
+
+# ── 3. .railwayignore ───────────────────────────────────────────────
+info "Setting up .railwayignore..."
+cat > .railwayignore << 'IGNORE'
+.claude
+.git
+node_modules
+IGNORE
+ok ".railwayignore created"
+
+# ── 4. Add/fix production start script ────────────────────────────────
 info "Checking start script..."
 if ! grep -q '"start"' package.json; then
-  # Insert start script after the preview line, or after build line
   if grep -q '"preview"' package.json; then
     sed -i '' '/"preview"/a\
     "start": "bunx serve dist -s -l ${PORT:-3000}",
@@ -63,7 +81,6 @@ if ! grep -q '"start"' package.json; then
   fi
   ok "Added start script"
 else
-  # Ensure it uses bunx
   if grep -q '"start":.*serve' package.json && ! grep -q 'bunx serve' package.json; then
     sed -i '' 's|"start":.*serve|"start": "bunx serve|' package.json
     ok "Updated start script to use bunx"
@@ -72,37 +89,13 @@ else
   fi
 fi
 
-# ── 3. Upgrade dependencies ──────────────────────────────────────────
-info "Upgrading all dependencies to latest..."
-bun update --latest 2>&1 | tail -5
-ok "Dependencies upgraded"
-
-# ── 4. Install dependencies ──────────────────────────────────────────
+# ── 5. Install dependencies ──────────────────────────────────────────
 info "Installing dependencies..."
 rm -rf node_modules
 bun install 2>&1 | tail -3
 ok "Dependencies installed"
 
-# ── 5. .gitignore ────────────────────────────────────────────────────
-info "Updating .gitignore..."
-GITIGNORE_ENTRIES=(".claude" "package-lock.json" "yarn.lock" "pnpm-lock.yaml")
-for entry in "${GITIGNORE_ENTRIES[@]}"; do
-  if ! grep -qxF "$entry" .gitignore 2>/dev/null; then
-    echo "$entry" >> .gitignore
-  fi
-done
-ok ".gitignore updated"
-
-# ── 6. .railwayignore ───────────────────────────────────────────────
-info "Setting up .railwayignore..."
-cat > .railwayignore << 'IGNORE'
-.claude
-.git
-node_modules
-IGNORE
-ok ".railwayignore created"
-
-# ── 7. CLAUDE.md ─────────────────────────────────────────────────────
+# ── 6. CLAUDE.md ─────────────────────────────────────────────────────
 if [ ! -f CLAUDE.md ]; then
   info "Creating CLAUDE.md..."
   cat > CLAUDE.md << CLAUDEMD
@@ -110,33 +103,25 @@ if [ ! -f CLAUDE.md ]; then
 
 ## Stack
 
-- **Framework:** React + TypeScript (Vite)
-- **Styling:** Tailwind CSS + shadcn/ui
-- **Package manager:** Bun
-- **Deployment:** Railway (auto-deploy from GitHub)
-- **Origin:** Lovable scaffold
+- React + TypeScript, Vite, Tailwind CSS + shadcn/ui
+- Bun for package management
+- Origin: Lovable scaffold
 
-## Commands
+## Deploy
 
-- \`bun install\` — install dependencies
-- \`bun run dev\` — start dev server
-- \`bun run build\` — production build
-- \`bun run test\` — run tests
-- \`bun run start\` — serve production build (used by Railway)
+- Auto-deploys on push to \`main\` via Railway GitHub integration
 
-## Project Structure
+## Conventions
 
-- \`src/\` — application source
-- \`src/components/\` — React components (shadcn/ui based)
-- \`src/pages/\` — route pages
-- \`public/\` — static assets
+- \`@/\` path alias maps to \`src/\`
+- \`src/components/ui/\` — shadcn/ui primitives, don't edit directly
 CLAUDEMD
   ok "CLAUDE.md created"
 else
   ok "CLAUDE.md already exists"
 fi
 
-# ── 8. Build verification ────────────────────────────────────────────
+# ── 7. Build verification ────────────────────────────────────────────
 info "Verifying build..."
 if bun run build 2>&1 | tail -5; then
   ok "Build succeeded"
@@ -144,7 +129,7 @@ else
   fail "Build failed — fix errors before deploying"
 fi
 
-# ── 9. Commit setup changes ──────────────────────────────────────────
+# ── 8. Commit setup changes ──────────────────────────────────────────
 info "Committing setup changes..."
 git add -A
 if git diff --cached --quiet; then
@@ -154,7 +139,6 @@ else
 
 - Clean lockfiles (Bun only)
 - Add production start script
-- Upgrade all dependencies to latest
 - Add .railwayignore and update .gitignore
 - Add CLAUDE.md
 
@@ -162,7 +146,7 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
   ok "Changes committed"
 fi
 
-# ── 10. Push ─────────────────────────────────────────────────────────
+# ── 9. Push ─────────────────────────────────────────────────────────
 info "Pushing to origin..."
 if git remote get-url origin >/dev/null 2>&1; then
   git push
@@ -171,7 +155,7 @@ else
   warn "No remote origin — skipping push"
 fi
 
-# ── 11. Railway setup (optional) ─────────────────────────────────────
+# ── 10. Railway setup (optional) ─────────────────────────────────────
 echo ""
 if command -v railway >/dev/null 2>&1; then
   read -p "$(echo -e "${BLUE}▸${NC}") Set up Railway project? [y/N] " -n 1 -r
