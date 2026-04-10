@@ -1,0 +1,71 @@
+#!/bin/bash
+# disk-cleanup — safe, repeatable disk space recovery
+# Run directly or via Claude Code /cleanup skill
+
+set -euo pipefail
+
+echo "=== Disk Cleanup ==="
+echo ""
+
+# --- Current state ---
+echo "## Current disk usage"
+diskutil apfs list disk3 2>/dev/null | grep -E "Capacity (In Use|Not Allocated)"
+echo ""
+
+# --- Homebrew ---
+echo "## Homebrew cleanup"
+brew cleanup 2>&1 | tail -5
+echo ""
+
+# --- Brave browser caches ---
+BRAVE_SAVED=0
+for dir in ~/Library/Caches/BraveSoftware ~/Library/Caches/com.brave.Browser; do
+    if [ -d "$dir" ]; then
+        size=$(du -sm "$dir" 2>/dev/null | awk '{print $1}')
+        BRAVE_SAVED=$((BRAVE_SAVED + size))
+        rm -rf "$dir"
+    fi
+done
+echo "## Brave caches: cleared ${BRAVE_SAVED}MB"
+
+# --- Claude desktop updater cache ---
+CLAUDE_SHIPIT=~/Library/Caches/com.anthropic.claudefordesktop.ShipIt
+if [ -d "$CLAUDE_SHIPIT" ]; then
+    size=$(du -sm "$CLAUDE_SHIPIT" 2>/dev/null | awk '{print $1}')
+    rm -rf "$CLAUDE_SHIPIT"
+    echo "## Claude ShipIt cache: cleared ${size}MB"
+else
+    echo "## Claude ShipIt cache: clean"
+fi
+
+# --- Spotify cache ---
+SPOTIFY=~/Library/Caches/com.spotify.client
+if [ -d "$SPOTIFY" ]; then
+    size=$(du -sm "$SPOTIFY" 2>/dev/null | awk '{print $1}')
+    rm -rf "$SPOTIFY"
+    echo "## Spotify cache: cleared ${size}MB"
+else
+    echo "## Spotify cache: clean"
+fi
+
+# --- iMessage attachments older than 2 months ---
+IMSG_DIR=~/Library/Messages/Attachments
+if [ -d "$IMSG_DIR" ]; then
+    count=$(find "$IMSG_DIR" -type f -mtime +60 2>/dev/null | wc -l | tr -d ' ')
+    if [ "$count" -gt 0 ]; then
+        size=$(find "$IMSG_DIR" -type f -mtime +60 -exec stat -f '%z' {} + 2>/dev/null | awk '{s+=$1} END {printf "%.0f", s/1048576}')
+        find "$IMSG_DIR" -type f -mtime +60 -delete 2>/dev/null
+        find "$IMSG_DIR" -type d -empty -delete 2>/dev/null
+        echo "## iMessage attachments (>2 months): cleared ${size}MB across ${count} files"
+    else
+        echo "## iMessage attachments: nothing older than 2 months"
+    fi
+fi
+
+echo ""
+
+# --- Final state ---
+echo "## After cleanup"
+diskutil apfs list disk3 2>/dev/null | grep -E "Capacity (In Use|Not Allocated)"
+echo ""
+echo "Done. Run '/cleanup' in Claude Code for deeper investigation."
