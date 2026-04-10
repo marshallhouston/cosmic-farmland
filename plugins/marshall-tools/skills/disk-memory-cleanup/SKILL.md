@@ -13,7 +13,7 @@ Two-phase disk space recovery: automated safe cleanup, then investigative audit.
 Run the cleanup script which handles safe, repeatable wins:
 
 ```bash
-~/bin/disk-cleanup
+~/code/tools/bin/disk-cleanup
 ```
 
 This clears: Homebrew cache, Brave browser caches, Claude desktop updater cache, Spotify cache, and iMessage attachments older than 2 months.
