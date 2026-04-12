@@ -51,21 +51,22 @@ A clear, single instruction for what the fresh session should do first. Not a me
 
 1. **Scan the conversation** for specs, plans, decisions, and current state. Identify what has been committed vs. what is still in-flight.
 2. **Read referenced files** to verify they exist and are current. Do not reference files that haven't been committed.
-3. **Draft the prompt** following the five-part structure above. Write it as a fenced code block so the user can copy-paste it directly.
+3. **Draft the prompt** following the five-part structure above.
 4. **Keep it concise.** Target 150-300 words. The prompt is a launch pad, not a novel. The fresh session will read the referenced files for detail.
-5. **Output the prompt** in a single fenced code block with no commentary before it. Follow it with a brief note on what to do: "Copy this, run `/clear`, paste it in."
+5. **Copy to clipboard automatically** using `pbcopy` (macOS). Pipe the raw prompt text (no markdown fences) to `pbcopy` via Bash so the user can paste immediately after `/clear`.
+6. **Display the prompt** in a fenced code block so the user can review what was copied.
+7. **Tell the user:** "Copied to clipboard. Run `/clear`, then paste."
 
 ## Format
 
-Output the resumption prompt as:
-
-````
+1. Copy to clipboard via Bash:
+```bash
+echo '<the resumption prompt>' | pbcopy
 ```
-<the resumption prompt>
-```
-````
 
-Then a one-liner: "Copy this, run `/clear`, paste it in."
+2. Display the same prompt in a fenced code block for review.
+
+3. One-liner: "Copied to clipboard. Run `/clear`, then paste."
 
 ## Anti-patterns to avoid
 
