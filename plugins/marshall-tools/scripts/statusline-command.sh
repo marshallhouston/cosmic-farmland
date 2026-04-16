@@ -38,9 +38,9 @@ esac
 # Auto-switch model + effort based on API health (takes effect next session)
 settings_file="$HOME/.claude/settings.json"
 if [ "$api_status" = "operational" ]; then
-  desired_model="opus"; desired_effort="max"
+  desired_model="opus"; desired_effort="medium"
 else
-  desired_model="sonnet"; desired_effort="high"
+  desired_model="sonnet"; desired_effort="medium"
 fi
 current_model=$(jq -r '.model // empty' "$settings_file" 2>/dev/null)
 current_effort=$(jq -r '.effortLevel // empty' "$settings_file" 2>/dev/null)
