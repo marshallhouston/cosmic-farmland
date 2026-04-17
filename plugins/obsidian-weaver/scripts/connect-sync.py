@@ -76,7 +76,21 @@ def release_lock():
         pass
 
 
+def safe_connection_filename(name):
+    """Sanitize a canonical entity name into a filesystem-safe filename (no extension)."""
+    return name.replace('/', '-').replace(':', ' -').replace('?', '').replace('"', '')
+
+
 def load_registry():
+    if not os.path.exists(REGISTRY):
+        print(json.dumps({
+            'status': 'error',
+            'reason': 'registry missing',
+            'expected_at': REGISTRY,
+            'hint': 'Run /obsidian-setup to seed _connections/ and create .registry.json, '
+                    'or set OBSIDIAN_CONNECTIONS if your connections folder is elsewhere.',
+        }, indent=2))
+        sys.exit(1)
     with open(REGISTRY) as f:
         return json.load(f)
 
@@ -188,8 +202,7 @@ def update_connection_page(entity_type, canonical, note_name, year, dry_run=Fals
     if not dir_name:
         return False
 
-    safe_name = canonical.replace('/', '-').replace(':', ' -').replace('?', '').replace('"', '')
-    filepath = os.path.join(CONNECTIONS, dir_name, safe_name + '.md')
+    filepath = os.path.join(CONNECTIONS, dir_name, safe_connection_filename(canonical) + '.md')
 
     if not os.path.exists(filepath):
         return False
@@ -470,8 +483,7 @@ def rebuild_index(registry=None):
     multi_year = []
     single_year = []
     for name in theme_names:
-        safe = name.replace('/', '-').replace(':', ' -').replace('?', '').replace('"', '')
-        path = os.path.join(CONNECTIONS, 'themes', safe + '.md')
+        path = os.path.join(CONNECTIONS, 'themes', safe_connection_filename(name) + '.md')
         years, count = parse_page_meta(path)
         entry = (name, sorted(years), count)
         if len(years) > 1:
@@ -500,8 +512,7 @@ def rebuild_index(registry=None):
     people_names = registry.get('people', [])
     people_entries = []
     for name in people_names:
-        safe = name.replace('/', '-').replace(':', ' -').replace('?', '').replace('"', '')
-        path = os.path.join(CONNECTIONS, 'people', safe + '.md')
+        path = os.path.join(CONNECTIONS, 'people', safe_connection_filename(name) + '.md')
         years, count = parse_page_meta(path)
         people_entries.append((name, sorted(years), count))
     people_entries.sort(key=lambda x: -x[2])
@@ -520,8 +531,7 @@ def rebuild_index(registry=None):
     lines.append(f'## Concerns ({len(concern_names)})')
     lines.append('')
     for name in concern_names:
-        safe = name.replace('/', '-').replace(':', ' -').replace('?', '').replace('"', '')
-        path = os.path.join(CONNECTIONS, 'concerns', safe + '.md')
+        path = os.path.join(CONNECTIONS, 'concerns', safe_connection_filename(name) + '.md')
         years, _ = parse_page_meta(path)
         yr_str = ', '.join(str(y) for y in sorted(years)) if years else '?'
         lines.append(f'- [[{name}]] ({yr_str})')
@@ -531,8 +541,7 @@ def rebuild_index(registry=None):
     decision_names = registry.get('decisions', [])
     decisions_by_year = defaultdict(list)
     for name in decision_names:
-        safe = name.replace('/', '-').replace(':', ' -').replace('?', '').replace('"', '')
-        path = os.path.join(CONNECTIONS, 'decisions', safe + '.md')
+        path = os.path.join(CONNECTIONS, 'decisions', safe_connection_filename(name) + '.md')
         years, _ = parse_page_meta(path)
         year = min(years) if years else 0
         decisions_by_year[year].append(name)

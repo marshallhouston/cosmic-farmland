@@ -59,7 +59,9 @@ Quick mode skips this.
 
 ## Step 4: Scan for Carryover Items
 
-Look at the last 7 calendar days of daily notes (yesterday going back 6 more days) in the daily-notes folder. Read the path from the `Paths` table in the vault's `CLAUDE.md` (key `daily_notes`). Fallback if the table is missing: `_weekly/_daily/`.
+Look at the last 7 calendar days of daily notes (yesterday going back 6 more days) in the daily-notes folder. Read the path from the `Paths` table in the vault's `CLAUDE.md` (key `daily_notes`).
+
+**If `$OBSIDIAN_VAULT/CLAUDE.md` is missing or has no `Paths` table**, stop and tell the user to run `/obsidian-setup` first. Do not guess a path.
 
 **Algorithm:**
 
@@ -129,7 +131,7 @@ This audit trail means you can always trace what happened to a task.
 
 ## Step 7: Create Today's Note
 
-Target path: `<daily_notes>/YYYY-MM-DD.md`, where `<daily_notes>` is the value from the `Paths` table in the vault's `CLAUDE.md` (fallback `_weekly/_daily/`).
+Target path: `<daily_notes>/YYYY-MM-DD.md`, where `<daily_notes>` is the value from the `Paths` table in the vault's `CLAUDE.md`. If the table is missing, stop and direct the user to `/obsidian-setup`.
 
 **Before writing:** if `$OBSIDIAN_VAULT/<daily_notes>/` doesn't exist, ask the user: *"The folder `<daily_notes>/` doesn't exist in your vault. Create it? [y/n]"*. On `y`, run `mkdir -p "$OBSIDIAN_VAULT/<daily_notes>"` and continue. On `n`, stop and tell them to either create the folder manually or update the `daily_notes` path in `CLAUDE.md` to one that exists.
 

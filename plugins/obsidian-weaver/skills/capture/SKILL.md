@@ -71,19 +71,19 @@ If the capture is a pure brain dump (no article), takeaways are distilled from t
 
 ### Step 5: Tag Strategic Areas
 
-Read the filenames in `_strategy/` (excluding `.gitkeep` and similar). Each filename minus `.md` is a valid tag.
+Read the filenames in `<strategy>/` (excluding `.gitkeep` and similar), where `<strategy>` is the value from the `Paths` table in the vault's `CLAUDE.md` (key `strategy`). Each filename minus `.md` is a valid tag.
 
 A capture can have zero, one, or multiple tags. Only tag when there is a genuine connection — do not force tags.
 
-If `_strategy/` is empty, skip tagging and note "No strategic areas defined yet."
+If the folder is empty or missing, skip tagging and note "No strategic areas defined yet."
 
 ### Step 6: Find Connections
 
-Scan these directories for related content:
+Resolve `<captures>`, `<people>`, and `<projects>` from the `Paths` table in the vault's `CLAUDE.md`, then scan:
 
-- `_inbox/captures/` — recent captures (read frontmatter and first few lines)
-- `_people/` — check if anyone mentioned is relevant
-- `_projects/` — check if a project relates to this topic
+- `<captures>/` — recent captures (read frontmatter and first few lines)
+- `<people>/` — check if anyone mentioned is relevant
+- `<projects>/` — check if a project relates to this topic
 
 A connection must be genuinely useful. Zero connections is fine. Forced connections erode trust.
 
