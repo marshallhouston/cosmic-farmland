@@ -272,7 +272,8 @@ def scan_file(filepath, matchers):
 def note_name_from_path(filepath):
     """Convert filepath to Obsidian note name (without .md, relative to vault)."""
     rel = os.path.relpath(filepath, VAULT)
-    return rel.replace('.md', '')
+    name, _ = os.path.splitext(rel)
+    return name.replace(os.sep, '/')
 
 
 def update_connection_page(entity_type, canonical, note_name, year, dry_run=False):
@@ -310,9 +311,15 @@ def update_connection_page(entity_type, canonical, note_name, year, dry_run=Fals
     elif year_header in content:
         # Add to existing year section
         idx = content.index(year_header) + len(year_header)
-        # Find next line
-        next_newline = content.index('\n', idx)
-        content = content[:next_newline + 1] + f'- [[{note_name}]]\n' + content[next_newline + 1:]
+        # Find next newline; if the year header is the final line (no trailing \n),
+        # splice at end-of-file and ensure the year header terminates.
+        next_newline = content.find('\n', idx)
+        if next_newline == -1:
+            if not content.endswith('\n'):
+                content += '\n'
+            content = content + f'- [[{note_name}]]\n'
+        else:
+            content = content[:next_newline + 1] + f'- [[{note_name}]]\n' + content[next_newline + 1:]
     else:
         # Add new year section at end
         content = content.rstrip() + f'\n\n{year_header}\n- [[{note_name}]]\n'
@@ -355,24 +362,36 @@ def inject_backlinks(filepath, hits, dry_run=False):
         content = f.read()
 
     if BACKLINK_MARKER in content:
-        # Replace existing section: everything from ## Connections to end (or next ##)
+        # Anchor only on the marker. The auto-block starts at the `## Connections`
+        # header we wrote immediately above the marker; if that header is missing
+        # (user hand-edited), start at the marker line itself and leave anything
+        # above untouched — never hunt for a `## Connections` heading by text,
+        # since the user may have authored their own elsewhere.
         marker_idx = content.index(BACKLINK_MARKER)
-        # Walk back to find the ## Connections header
-        section_start = content.rfind('\n## Connections', 0, marker_idx)
-        if section_start == -1:
-            section_start = content.rfind('## Connections', 0, marker_idx)
+        line_start = content.rfind('\n', 0, marker_idx)
+        line_start = 0 if line_start == -1 else line_start + 1
+        auto_header = '## Connections\n'
+        prev_line_start = content.rfind('\n', 0, max(line_start - 1, 0))
+        prev_line_start = 0 if prev_line_start == -1 else prev_line_start + 1
+        prev_line = content[prev_line_start:line_start]
+        if prev_line == auto_header:
+            section_start = prev_line_start
         else:
-            section_start += 1  # skip the leading newline
+            section_start = line_start
 
-        # Find the end of the auto-generated section: next ## header or end of file
+        # End of auto-block: next `## ` header (or EOF).
         after_marker = marker_idx + len(BACKLINK_MARKER)
         next_header = content.find('\n## ', after_marker)
-        if next_header == -1:
-            section_end = len(content)
-        else:
-            section_end = next_header
+        section_end = len(content) if next_header == -1 else next_header + 1
 
-        updated = content[:section_start] + new_section.lstrip('\n') + content[section_end:]
+        # Preserve a single newline separator before our block if we're splicing
+        # mid-document so we don't collapse into the preceding paragraph.
+        prefix = content[:section_start]
+        suffix = content[section_end:]
+        replacement = new_section.lstrip('\n')
+        if prefix and not prefix.endswith('\n'):
+            prefix += '\n'
+        updated = prefix + replacement + suffix
     else:
         # Append new section at end
         updated = content.rstrip() + '\n' + new_section
