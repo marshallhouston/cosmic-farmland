@@ -21,10 +21,12 @@ Usage:
     python3 connect-sync.py --deep --today     # Deep mode: flag files for LLM review
 """
 
+import errno
 import json
 import os
 import re
 import sys
+import tempfile
 import time
 from datetime import datetime, timedelta
 from collections import defaultdict
@@ -52,20 +54,54 @@ SKIP_DIRS = {
 SKIP_BACKLINK_FILES = {'CLAUDE.md', 'README.md', '.pr-description.md'}
 
 
+def atomic_write(path, data):
+    """Write `data` to `path` atomically via a same-dir tempfile + os.replace."""
+    dir_ = os.path.dirname(path) or "."
+    fd, tmp = tempfile.mkstemp(prefix=".tmp-", dir=dir_)
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(data)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def _try_create_lock():
+    """Atomically create LOCKFILE. Returns True on success, False if it already exists."""
+    payload = json.dumps({'pid': os.getpid(), 'started': datetime.now().isoformat()})
+    try:
+        fd = os.open(LOCKFILE, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+    except FileExistsError:
+        return False
+    except OSError as e:
+        if e.errno == errno.EEXIST:
+            return False
+        raise
+    with os.fdopen(fd, 'w') as f:
+        f.write(payload)
+    return True
+
+
 def acquire_lock():
     """Try to acquire the sync lock. Returns True if acquired, False if another sync is running."""
-    if os.path.exists(LOCKFILE):
-        try:
-            lock_age = time.time() - os.path.getmtime(LOCKFILE)
-            if lock_age < LOCK_TTL:
-                return False  # Another sync is actively running
-            # Stale lock — previous run crashed or timed out, safe to take over
-        except OSError:
-            pass
-    # Write lock with our PID
-    with open(LOCKFILE, 'w') as f:
-        f.write(json.dumps({'pid': os.getpid(), 'started': datetime.now().isoformat()}))
-    return True
+    if _try_create_lock():
+        return True
+    # Existed — check staleness. One retry after unlinking a stale lock.
+    try:
+        lock_age = time.time() - os.path.getmtime(LOCKFILE)
+    except OSError:
+        return False
+    if lock_age < LOCK_TTL:
+        return False
+    try:
+        os.unlink(LOCKFILE)
+    except OSError:
+        pass
+    return _try_create_lock()
 
 
 def release_lock():
@@ -91,20 +127,36 @@ def load_registry():
                     'or set OBSIDIAN_CONNECTIONS if your connections folder is elsewhere.',
         }, indent=2))
         sys.exit(1)
-    with open(REGISTRY) as f:
-        return json.load(f)
+    try:
+        with open(REGISTRY) as f:
+            return json.load(f)
+    except json.JSONDecodeError as e:
+        print(json.dumps({
+            'status': 'error',
+            'reason': 'registry unreadable',
+            'expected_at': REGISTRY,
+            'parse_error': f'{e.msg} at line {e.lineno} column {e.colno}',
+            'hint': 'Fix or regenerate .registry.json — see _connections-seed/README.md for the expected shape.',
+        }, indent=2))
+        sys.exit(1)
 
 
 def load_state():
-    if os.path.exists(STATE):
+    if not os.path.exists(STATE):
+        return {'last_sync': '2020-01-01T00:00:00', 'synced_files': [], 'sync_count': 0}
+    try:
         with open(STATE) as f:
             return json.load(f)
-    return {'last_sync': '2020-01-01T00:00:00', 'synced_files': [], 'sync_count': 0}
+    except json.JSONDecodeError as e:
+        sys.stderr.write(
+            f'warning: {STATE} is unreadable ({e.msg} at line {e.lineno}); '
+            'resetting state and rescanning from scratch\n'
+        )
+        return {'last_sync': '2020-01-01T00:00:00', 'synced_files': [], 'sync_count': 0}
 
 
 def save_state(state):
-    with open(STATE, 'w') as f:
-        json.dump(state, f, indent=2)
+    atomic_write(STATE, json.dumps(state, indent=2))
 
 
 def find_modified_files(since_dt, specific_file=None):
@@ -233,8 +285,7 @@ def update_connection_page(entity_type, canonical, note_name, year, dry_run=Fals
         content = content.rstrip() + f'\n\n{year_header}\n- [[{note_name}]]\n'
 
     if not dry_run:
-        with open(filepath, 'w') as f:
-            f.write(content)
+        atomic_write(filepath, content)
 
     return True
 
@@ -297,8 +348,7 @@ def inject_backlinks(filepath, hits, dry_run=False):
         return False
 
     if not dry_run:
-        with open(filepath, 'w') as f:
-            f.write(updated)
+        atomic_write(filepath, updated)
 
     return True
 
@@ -311,8 +361,8 @@ def main():
 
     # Lock: prevent concurrent runs from multiple sessions
     if not acquire_lock():
-        print(json.dumps({'status': 'skipped', 'reason': 'another sync is running'}))
-        return
+        print(json.dumps({'status': 'error', 'reason': 'sync in progress'}))
+        sys.exit(1)
 
     try:
         _run_sync(args, dry_run)
@@ -556,8 +606,7 @@ def rebuild_index(registry=None):
         lines.append('')
 
     index_path = os.path.join(CONNECTIONS, '_index.md')
-    with open(index_path, 'w') as f:
-        f.write('\n'.join(lines))
+    atomic_write(index_path, '\n'.join(lines))
 
 
 if __name__ == '__main__':
