@@ -7,9 +7,9 @@
   },
   "plugins": [
     {
-      "name": "marshall-tools",
-      "description": "Cross-project skills, commands, and hooks for marshall's dev workflow",
-      "source": "./plugins/marshall-tools",
+      "name": "cosmic-farmland",
+      "description": "Marshall's cross-project skills, commands, and hooks",
+      "source": "./plugins/cosmic-farmland",
       "category": "productivity"
     },
     {

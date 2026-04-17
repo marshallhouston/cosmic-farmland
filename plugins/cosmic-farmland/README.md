@@ -1,6 +1,6 @@
-# marshall-tools
+# cosmic-farmland
 
-Cross-project skills, commands, and hooks for marshall's dev workflow.
+Marshall's cross-project skills, commands, and hooks.
 
 ## Install
 
@@ -8,7 +8,7 @@ In Claude Code:
 
 ```
 /plugin marketplace add marshallhouston/cosmic-farmland
-/plugin install marshall-tools@cosmic-farmland
+/plugin install cosmic-farmland@cosmic-farmland
 /reload-plugins
 ```
 
