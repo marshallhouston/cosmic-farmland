@@ -1,5 +1,5 @@
 ---
-description: PTVM audit of recent commits/PR. Flags bloat, ranks kill candidates. Levels whiff|sniff|huff|dutch-oven-yourselff.
+description: PTVM (Prove The Value Motherfucker) audit. Alias for /fart-smell-detection. Levels whiff|sniff|huff|dutch-oven-yourselff.
 argument-hint: "[whiff|sniff|huff|dutch-oven-yourselff] [PR #N | git-range | --staged]"
 ---
 

@@ -26,5 +26,5 @@ In Claude Code:
 **Commands**
 
 - `/execute-plan` — execute a written plan
-- `/fart-smell-detection [level] [target]` — run the skill above. Target = PR number, git range, `--staged`, or auto-detect current branch's open PR.
+- `/fart-smell-detection [level] [target]` — run the skill above. Target = PR number, git range, `--staged`, or auto-detect current branch's open PR. Aliases: `/ptvm`, `/prove-the-value-motherfucker`.
 - `/granola-sync` — sync recent Granola meetings
