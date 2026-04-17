@@ -7,7 +7,7 @@ Claude Code as the interface to your Obsidian vault — and a background process
 In Claude Code:
 
 ```
-/plugin marketplace add marshallhouston/tools
+/plugin marketplace add marshallhouston/cosmic-farmland
 /plugin install obsidian-weaver@cosmic-farmland
 ```
 

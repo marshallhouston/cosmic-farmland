@@ -13,7 +13,7 @@ Cross-project scripts and a Claude Code plugin for my dev workflow.
 In Claude Code:
 
 ```
-/plugin marketplace add marshallhouston/tools
+/plugin marketplace add marshallhouston/cosmic-farmland
 /plugin install marshall-tools@cosmic-farmland
 /plugin install obsidian-weaver@cosmic-farmland
 ```
