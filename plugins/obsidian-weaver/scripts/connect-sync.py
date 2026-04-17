@@ -261,12 +261,21 @@ def build_matchers(registry):
 
 
 def scan_file(filepath, matchers):
-    """Scan a file for entity mentions. Returns dict of {type: {canonical_name: True}}."""
+    """Scan a file for entity mentions.
+    Returns (hits_dict, skip_reason_or_None). hits_dict is {type: {canonical_name}}.
+    When skip_reason is not None the file was unreadable and hits is empty."""
     try:
         with open(filepath) as f:
             content = f.read()
-    except (UnicodeDecodeError, PermissionError, FileNotFoundError):
-        return {}
+    except UnicodeDecodeError as e:
+        # User's file encoding issue — retry on next run won't help. Surface as skipped.
+        return {}, f'UnicodeDecodeError: {e.reason}'
+    except FileNotFoundError:
+        # Race: file deleted between enumeration and read. Safe to silently skip.
+        return {}, 'FileNotFoundError'
+    # PermissionError and other OSError propagate to the caller so the per-file
+    # try/except in the main loop records them as failures and caps last_sync
+    # so they're retried on the next run.
 
     # Strip auto-generated Connections section so we only match the note's real content
     marker_idx = content.find(BACKLINK_MARKER)
@@ -288,7 +297,7 @@ def scan_file(filepath, matchers):
         if pattern.search(content):
             hits[entity_type].add(canonical)
 
-    return dict(hits)
+    return dict(hits), None
 
 
 def note_name_from_path(filepath):
@@ -441,7 +450,17 @@ def main():
         sys.exit(1)
 
     try:
-        _run_sync(args, dry_run)
+        try:
+            _run_sync(args, dry_run)
+        except SystemExit:
+            raise
+        except BaseException as e:
+            print(json.dumps({
+                'status': 'error',
+                'reason': type(e).__name__,
+                'message': str(e),
+            }))
+            sys.exit(1)
     finally:
         release_lock()
 
@@ -475,45 +494,64 @@ def _run_sync(args, dry_run):
     # Scan and update
     updates = []
     total_links_added = 0
+    failures = []
+    skipped = []
+    failed_mtimes = []
 
     for filepath in modified:
-        note_name = note_name_from_path(filepath)
-        basename = os.path.basename(filepath)
+        try:
+            note_name = note_name_from_path(filepath)
+            basename = os.path.basename(filepath)
 
-        # Skip if file was deleted between find and process (concurrent sessions)
-        if not os.path.exists(filepath):
-            continue
+            # Skip if file was deleted between find and process (concurrent sessions)
+            if not os.path.exists(filepath):
+                continue
 
-        # Determine year from filename or modification time
-        year_match = re.match(r'(\d{4})-', basename)
-        if year_match:
-            year = int(year_match.group(1))
-        else:
-            year = datetime.fromtimestamp(os.path.getmtime(filepath)).year
+            # Determine year from filename or modification time
+            year_match = re.match(r'(\d{4})-', basename)
+            if year_match:
+                year = int(year_match.group(1))
+            else:
+                year = datetime.fromtimestamp(os.path.getmtime(filepath)).year
 
-        # Scan for entity mentions
-        hits = scan_file(filepath, matchers)
+            # Scan for entity mentions
+            hits, skip_reason = scan_file(filepath, matchers)
+            if skip_reason is not None:
+                skipped.append({
+                    'path': os.path.relpath(filepath, VAULT),
+                    'reason': skip_reason,
+                })
+                continue
 
-        if not hits:
-            continue
+            if not hits:
+                continue
 
-        file_updates = []
-        for entity_type, names in hits.items():
-            for canonical in names:
-                if update_connection_page(entity_type, canonical, note_name, year, dry_run):
-                    file_updates.append({'type': entity_type, 'name': canonical})
-                    total_links_added += 1
+            file_updates = []
+            for entity_type, names in hits.items():
+                for canonical in names:
+                    if update_connection_page(entity_type, canonical, note_name, year, dry_run):
+                        file_updates.append({'type': entity_type, 'name': canonical})
+                        total_links_added += 1
 
-        # Inject backlinks into the source note (skip config files)
-        if basename not in SKIP_BACKLINK_FILES:
-            inject_backlinks(filepath, hits, dry_run)
+            # Inject backlinks into the source note (skip config files)
+            if basename not in SKIP_BACKLINK_FILES:
+                inject_backlinks(filepath, hits, dry_run)
 
-        if file_updates:
-            updates.append({
-                'file': basename,
-                'note': note_name,
-                'connections': file_updates,
+            if file_updates:
+                updates.append({
+                    'file': basename,
+                    'note': note_name,
+                    'connections': file_updates,
+                })
+        except Exception as e:
+            failures.append({
+                'path': os.path.relpath(filepath, VAULT),
+                'error': f'{type(e).__name__}: {e}',
             })
+            try:
+                failed_mtimes.append(os.path.getmtime(filepath))
+            except OSError:
+                pass
 
     # Identify files with zero or very few hits — candidates for LLM review
     # These are files the pattern matcher couldn't classify, suggesting they may
@@ -528,7 +566,11 @@ def _run_sync(args, dry_run):
         # Skip templates, standups dir listing, etc.
         if '/_templates/' in filepath or basename.startswith('.'):
             continue
-        hits = scan_file(filepath, matchers)
+        try:
+            hits, _skip = scan_file(filepath, matchers)
+        except Exception:
+            # Already recorded in `failures` above; don't double-count.
+            continue
         hit_count = sum(len(v) for v in hits.values())
         if hit_count <= 1:
             # Read first 200 chars to give the LLM context on what's in the file
@@ -544,9 +586,14 @@ def _run_sync(args, dry_run):
                 'preview': preview[:150],
             })
 
-    # Update state
+    # Update state. If any file failed, cap last_sync at the oldest failed mtime
+    # so the next run re-picks up the failed files (ensures retry semantics).
     if not dry_run:
-        state['last_sync'] = datetime.now().isoformat()
+        if failed_mtimes:
+            cap = min(failed_mtimes) - 1
+            state['last_sync'] = datetime.fromtimestamp(cap).isoformat()
+        else:
+            state['last_sync'] = datetime.now().isoformat()
         state['sync_count'] = state.get('sync_count', 0) + 1
         state['synced_files'] = [os.path.basename(f) for f in modified[:50]]
         save_state(state)
@@ -563,6 +610,8 @@ def _run_sync(args, dry_run):
         'files_with_updates': len(updates),
         'total_links_added': total_links_added,
         'updates': updates,
+        'failures': failures,
+        'skipped': skipped,
         'since': since_dt.isoformat(),
     }
 
