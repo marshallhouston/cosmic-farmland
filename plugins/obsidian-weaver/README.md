@@ -2,6 +2,17 @@
 
 Claude Code as the interface to your Obsidian vault — and a background process that weaves connections between your notes as you write them. Daily planning, quick captures, and an auto-maintained knowledge graph in one plugin. Install once, point it at any vault via `$OBSIDIAN_VAULT`, and `/today`, `/capture`, and `/connect-sync` work from anywhere.
 
+## Install
+
+In Claude Code:
+
+```
+/plugin marketplace add marshallhouston/tools
+/plugin install obsidian-weaver@cosmic-farmland
+```
+
+Then run `/obsidian-setup` (see [Quick start](#quick-start)).
+
 ## The pattern
 
 ```
@@ -67,7 +78,7 @@ That's the loop. Morning `/today` to frame the day. `/capture` throughout. `/con
 
 ## Quick start
 
-1. **Install the plugin** (via your plugin manager / marketplace, or however this repo exposes it in your setup).
+1. **Install the plugin** (see [Install](#install) above).
 
 2. **Set `OBSIDIAN_VAULT`** to your vault's absolute path. Either in your shell rc:
 

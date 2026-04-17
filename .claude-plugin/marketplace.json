@@ -1,6 +1,6 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "name": "marshall-tools",
+  "name": "cosmic-farmland",
   "description": "Marshall's cross-project tools: skills, commands, and utilities",
   "owner": {
     "name": "Marshall Houston"
