@@ -9,6 +9,7 @@ In Claude Code:
 ```
 /plugin marketplace add marshallhouston/cosmic-farmland
 /plugin install marshall-tools@cosmic-farmland
+/reload-plugins
 ```
 
 ## Contents

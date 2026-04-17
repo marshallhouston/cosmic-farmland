@@ -16,6 +16,7 @@ In Claude Code:
 /plugin marketplace add marshallhouston/cosmic-farmland
 /plugin install marshall-tools@cosmic-farmland
 /plugin install obsidian-weaver@cosmic-farmland
+/reload-plugins
 ```
 
 Install whichever you want. See each plugin's README for usage:

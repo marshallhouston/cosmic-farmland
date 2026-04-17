@@ -9,6 +9,7 @@ In Claude Code:
 ```
 /plugin marketplace add marshallhouston/cosmic-farmland
 /plugin install obsidian-weaver@cosmic-farmland
+/reload-plugins
 ```
 
 Then run `/obsidian-setup` (see [Quick start](#quick-start)).
