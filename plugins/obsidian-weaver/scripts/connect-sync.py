@@ -145,9 +145,30 @@ def release_lock():
         pass
 
 
+_WINDOWS_RESERVED = {
+    'CON', 'PRN', 'AUX', 'NUL',
+    *(f'COM{i}' for i in range(1, 10)),
+    *(f'LPT{i}' for i in range(1, 10)),
+}
+
+
 def safe_connection_filename(name):
-    """Sanitize a canonical entity name into a filesystem-safe filename (no extension)."""
-    return name.replace('/', '-').replace(':', ' -').replace('?', '').replace('"', '')
+    """Sanitize a canonical entity name into a filesystem-safe filename (no extension).
+    Allowlist-based: any char outside [A-Za-z0-9 _\\-\\.] becomes '-'. Rejects empty,
+    '.', '..', and Windows reserved names to prevent path-traversal and reserved-name
+    surprises when an adversary-influenced string reaches the filesystem."""
+    cleaned = re.sub(r'[^A-Za-z0-9 _\-\.]', '-', name).strip('. ')
+    if not cleaned or cleaned in ('.', '..') or cleaned.upper() in _WINDOWS_RESERVED:
+        raise ValueError(f'invalid connection filename: {name!r}')
+    return cleaned
+
+
+def assert_inside_vault(p):
+    """Raise ValueError if `p` (after realpath) is not the vault itself or inside it."""
+    rp = os.path.realpath(p)
+    rv = os.path.realpath(VAULT)
+    if not (rp == rv or rp.startswith(rv + os.sep)):
+        raise ValueError(f'path escapes vault: {p}')
 
 
 def load_registry():
@@ -196,6 +217,7 @@ def find_modified_files(since_dt, specific_file=None):
     """Find .md files modified since the given datetime."""
     if specific_file:
         fp = os.path.join(VAULT, specific_file) if not os.path.isabs(specific_file) else specific_file
+        assert_inside_vault(fp)
         if os.path.exists(fp):
             return [fp]
         return []
@@ -289,6 +311,7 @@ def update_connection_page(entity_type, canonical, note_name, year, dry_run=Fals
         return False
 
     filepath = os.path.join(CONNECTIONS, dir_name, safe_connection_filename(canonical) + '.md')
+    assert_inside_vault(filepath)
 
     if not os.path.exists(filepath):
         return False
@@ -345,6 +368,7 @@ def inject_backlinks(filepath, hits, dry_run=False):
     Returns True if the file was changed."""
     if not hits:
         return False
+    assert_inside_vault(filepath)
 
     # Build the connections section
     section_lines = ['\n## Connections', BACKLINK_MARKER]
@@ -658,6 +682,7 @@ def rebuild_index(registry=None):
         lines.append('')
 
     index_path = os.path.join(CONNECTIONS, '_index.md')
+    assert_inside_vault(index_path)
     atomic_write(index_path, '\n'.join(lines))
 
 
