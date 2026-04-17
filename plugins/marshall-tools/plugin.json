@@ -1,5 +1,6 @@
 {
   "name": "marshall-tools",
   "version": "0.1.0",
-  "description": "Cross-project skills, commands, and hooks for marshall's dev workflow"
+  "description": "Cross-project skills, commands, and hooks for marshall's dev workflow",
+  "license": "MIT"
 }

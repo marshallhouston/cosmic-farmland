@@ -1,0 +1,149 @@
+# {{Your Name}} — Vault Context
+
+> Copy this file to `CLAUDE.md` at the root of your Obsidian vault, then fill in the placeholders. This file is auto-loaded by Claude Code in every session rooted at this vault — it's how skills get the context they need to be useful.
+
+## Me
+
+{{One or two lines about your role and what you spend your time on. The more specific, the better the agent's defaults will be.}}
+
+Example: *"Senior engineer on the Platform team at Acme Corp. Focused on observability, on-call rotations, and mentoring two junior engineers."*
+
+## People
+
+A table of people you work with regularly. Use first-name shortcuts as keys — the agent uses this to disambiguate when you say "set up a 1:1 with Derrick" or "draft a message to the team."
+
+| Who | Role |
+|-----|------|
+| **Derrick** | Derrick Henry, Senior Engineer (direct report) |
+| **Julio** | Julio Jones, Product Manager (peer) |
+| **Bryce** | Bryce Young, Engineering Director (manager) |
+
+## Terms
+
+Acronyms and internal terms you use that the agent wouldn't otherwise know. Keeps it from misinterpreting your shorthand.
+
+| Term | Meaning |
+|------|---------|
+| **{{ACRONYM}}** | {{What it stands for and a one-line explanation}} |
+
+## Projects
+
+A table of active projects. Update as projects start and end. Used by `/status`, `/connect-sync`, and any other skill that needs to know what you're working on.
+
+| Name | What |
+|------|------|
+| **Platform Migration** | Moving services from EC2 to Kubernetes, Q3 deadline |
+| **Hiring Plan** | Filling two open senior roles by end of quarter |
+
+## Preferences
+
+How you like to work. Add anything the agent should know to act in your style.
+
+- {{Preference 1 — e.g., "Prefer bullet points over prose for status updates"}}
+- {{Preference 2 — e.g., "Don't use em-dashes; regular hyphens only"}}
+- {{Preference 3}}
+
+---
+
+# Obsidian Vault Conventions
+
+The rest of this file documents the conventions skills depend on. Adjust paths and patterns to match your vault layout, then keep them in sync as you evolve the system.
+
+## Paths
+
+Skills read these paths from this section. Edit them to match your vault. Paths are relative to `$OBSIDIAN_VAULT`.
+
+| Key | Path | Used by |
+|-----|------|---------|
+| **daily_notes** | `_weekly/_daily/` | `/today`, `/connect-sync` |
+| **captures** | `_inbox/captures/` | `/capture` |
+| **templates** | `_templates/` | `/today`, `/capture` |
+| **connections** | `_connections/` | `/connect-sync` |
+| **people** | `_people/` | `/capture`, `/connect-sync` |
+| **projects** | `_projects/` | `/capture`, `/connect-sync` |
+| **strategy** | `_strategy/` | `/capture` |
+
+`/obsidian-setup` seeds this table. Change a value and skills pick up the change on their next run.
+
+## Templates
+
+Templates live in `_templates/` and are referenced by skills via `obsidian create name="..." template="..."`.
+
+| Situation | Template |
+|-----------|----------|
+| 1:1 with direct report | `1on1-template.md` |
+| 1:1 with another manager | `peer-1on1.md` |
+| Daily planning | `daily-note.md` |
+| Standup | `standup-template.md` |
+
+Templates use `{{date}}` as a placeholder, resolved automatically by `obsidian create`.
+
+## Naming Conventions — Kebab-Case
+
+All filenames use **kebab-case**: lowercase, hyphens instead of spaces, no special characters.
+
+- 1:1 notes: `YYYY-MM-DD-1on1-firstname-lastname.md`
+- Standups: `YYYY-MM-DD-team-standup.md`
+- Daily notes: `YYYY-MM-DD.md` (matches Obsidian daily note plugin)
+- Meeting notes: `YYYY-MM-DD-meeting-topic.md`
+- `&` becomes `-and-`, colons/parentheses/brackets are removed, multiple hyphens collapse
+
+## Folder Structure
+
+```
+_templates/        # Note templates (referenced by skills, don't modify casually)
+_weekly/_daily/    # Daily planning notes (matches Obsidian daily note plugin)
+_inbox/            # Captures from /capture
+  captures/
+_strategy/         # Strategic area pages (used as tags by /capture)
+_people/           # One file per person (used for connections)
+_projects/         # One file per project (used for connections)
+_connections/      # Auto-maintained by /connect-sync
+  themes/
+  people/
+  concerns/
+  decisions/
+```
+
+Adjust to your taste. Most skills can be configured to use different paths — check each skill's frontmatter and code.
+
+## Obsidian CLI
+
+The `obsidian` CLI (install separately) is the bridge for vault interaction. Skills prefer it when available:
+
+- `obsidian daily:read` / `obsidian daily:append` — read/write today's daily note
+- `obsidian create name="..." template="..."` — create notes from templates
+- `obsidian tasks todo file="..." verbose` — list incomplete tasks with line numbers
+- `obsidian task file="..." line=N done` — mark a task complete
+- `obsidian read file="..."` / `obsidian search:context query="..."` — read and search
+- `obsidian links file="..."` / `obsidian backlinks file="..."` — navigate the graph
+- `obsidian rename` — rename files (updates all wikilinks automatically)
+
+Skills work without the CLI — they fall back to direct file operations — but lose some convenience.
+
+## Formatting
+
+- Use `[[kebab-case-name]]` wikilinks when referencing people or notes (e.g., `[[derrick-henry]]`)
+- Use `- [ ]` for action items (trackable checkboxes)
+- Templates use `{{date}}` placeholder (resolved automatically by `obsidian create`)
+
+## Action Items
+
+Action item tracking is critical to the daily note flow. When asked about open tasks:
+
+- Search for uncompleted checkboxes: `- [ ]`
+- Look in recent daily notes and 1:1s
+- Always include **yesterday's note first**, even if outside the past week
+- Review the last 7 days in **reverse chronological order, starting from yesterday**
+- Don't skip recent days (e.g., don't skip Monday if today is Tuesday)
+- Help transfer incomplete items to new daily notes (the `/today` skill handles this)
+
+## Carryover Annotations
+
+The `/today` skill leaves an audit trail on every action item it touches. When you see these in old notes, that's why:
+
+- `- [x] carried over to YYYY-MM-DD - {item text}` — moved to a future daily note
+- `- [x] dropped on YYYY-MM-DD - {item text}` — explicitly dropped (usually after going stale)
+- `- [x] declined to carry over on YYYY-MM-DD - {item text}` — presented but not selected
+
+In new daily notes, items have a `(carried forward N days)` suffix so you can see how long something has been on the list.

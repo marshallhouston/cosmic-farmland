@@ -1,0 +1,28 @@
+{
+  "_comment": "Registry of known entities. The sync script reads _alias_map to pattern-match notes. Add your real themes, people, concerns, and decisions here. Delete this _comment field.",
+  "themes": [
+    "Platform Migration",
+    "Hiring Plan"
+  ],
+  "people": [
+    "Derrick Henry",
+    "Julio Jones"
+  ],
+  "concerns": [
+    "Tech Debt"
+  ],
+  "decisions": [
+    "Adopt Platform X"
+  ],
+  "_alias_map": {
+    "platform migration": { "type": "theme", "canonical": "Platform Migration" },
+    "hiring plan": { "type": "theme", "canonical": "Hiring Plan" },
+    "derrick henry": { "type": "person", "canonical": "Derrick Henry" },
+    "derrick": { "type": "person", "canonical": "Derrick Henry" },
+    "julio jones": { "type": "person", "canonical": "Julio Jones" },
+    "julio": { "type": "person", "canonical": "Julio Jones" },
+    "tech debt": { "type": "concern", "canonical": "Tech Debt" },
+    "technical debt": { "type": "concern", "canonical": "Tech Debt" },
+    "adopt platform x": { "type": "decision", "canonical": "Adopt Platform X" }
+  }
+}

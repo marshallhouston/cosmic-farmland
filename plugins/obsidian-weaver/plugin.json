@@ -1,0 +1,6 @@
+{
+  "name": "obsidian-weaver",
+  "version": "0.1.0",
+  "description": "Claude Code as the interface to your Obsidian vault. Daily notes, captures, and an auto-maintained knowledge graph that weaves connections between your notes as you write them. Vault-agnostic — set OBSIDIAN_VAULT and run /obsidian-setup.",
+  "license": "MIT"
+}

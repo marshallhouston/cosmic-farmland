@@ -11,6 +11,12 @@
       "description": "Cross-project skills, commands, and hooks for marshall's dev workflow",
       "source": "./plugins/marshall-tools",
       "category": "productivity"
+    },
+    {
+      "name": "obsidian-weaver",
+      "description": "Claude Code as the interface to your Obsidian vault. Daily notes, captures, and an auto-maintained knowledge graph that weaves connections between your notes as you write them. Vault-agnostic — set OBSIDIAN_VAULT and run /obsidian-setup.",
+      "source": "./plugins/obsidian-weaver",
+      "category": "productivity"
     }
   ]
 }
