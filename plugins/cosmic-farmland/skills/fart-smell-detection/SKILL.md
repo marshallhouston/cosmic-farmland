@@ -1,6 +1,6 @@
 ---
 name: fart-smell-detection
-description: "Audit recent commits/PRs for bloat vs real value using PTVM (Prove The Value Motherfucker). Flags cologne-sniffing changes, ranks kill candidates. Use when the user says /fart-smell-detection, asks 'is this bloat?', 'prove the value', 'which of these commits are worth keeping', or wants a skeptical review of a batch of changes before merge."
+description: "Audit recent commits/PRs for bloat vs real value using PTVM (Prove The Value Motherfucker). Flags cologne-sniffing changes, ranks kill candidates. Use when the user says /fart-smell-detection, /ptvm, /prove-the-value-motherfucker, asks 'is this bloat?', 'prove the value', 'PTVM this', 'which of these commits are worth keeping', or wants a skeptical review of a batch of changes before merge."
 argument-hint: "[level] [target]  e.g. 'huff PR #42', 'sniff main..HEAD', 'dutch-oven-yourselff' (staged)"
 ---
 
@@ -11,6 +11,8 @@ Skeptically review a batch of changes. Prove every commit earns its keep. Kill t
 ## When to use
 
 - `/fart-smell-detection [level] [target]`
+- `/ptvm [level] [target]` — alias
+- `/prove-the-value-motherfucker [level] [target]` — alias
 - "did we just add bloat?"
 - "PTVM these commits"
 - "which of these are fart-sniffing?"
