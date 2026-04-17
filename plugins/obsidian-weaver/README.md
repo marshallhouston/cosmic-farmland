@@ -115,7 +115,7 @@ $OBSIDIAN_VAULT/
     └── decisions/
 ```
 
-The paths aren't hardcoded — skills reference them as conventions. If your vault is laid out differently, edit the paths in `CLAUDE.md` and the individual SKILL.md files. The one path that *is* hardcoded is `_connections/` — the connect-sync script uses it by default. Change `CONNECTIONS` in `scripts/connect-sync.py` if you need to move it.
+The paths aren't hardcoded — skills reference them as conventions. If your vault is laid out differently, edit the paths in `CLAUDE.md` and the individual SKILL.md files. The connect-sync script defaults to `$OBSIDIAN_VAULT/_connections`; to relocate it, export `OBSIDIAN_CONNECTIONS` (see the note in the Automation section below).
 
 ## The `obsidian` CLI (optional)
 
@@ -127,7 +127,7 @@ The `today` and `capture` skills prefer a CLI named `obsidian` for:
 - `obsidian task file="..." line=N done`
 - `obsidian read file="..."` / `search:context query="..."`
 - `obsidian links file="..."` / `backlinks file="..."`
-- `obsidian tags file="..."` / `rename ...`
+- `obsidian tags file="..."`
 
 There are several community CLIs with this shape — pick one, or write thin wrappers. Skills fall back to direct file reads/writes if the CLI isn't on `$PATH`.
 

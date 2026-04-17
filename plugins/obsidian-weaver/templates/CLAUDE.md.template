@@ -116,8 +116,7 @@ The `obsidian` CLI (install separately) is the bridge for vault interaction. Ski
 - `obsidian tasks todo file="..." verbose` — list incomplete tasks with line numbers
 - `obsidian task file="..." line=N done` — mark a task complete
 - `obsidian read file="..."` / `obsidian search:context query="..."` — read and search
-- `obsidian links file="..."` / `obsidian backlinks file="..."` — navigate the graph
-- `obsidian rename` — rename files (updates all wikilinks automatically)
+- `obsidian links file="..."` / `obsidian backlinks file="..."` — navigate the graph (used by `/connect-sync deep`)
 
 Skills work without the CLI — they fall back to direct file operations — but lose some convenience.
 

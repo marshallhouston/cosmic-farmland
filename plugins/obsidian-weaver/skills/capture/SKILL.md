@@ -95,7 +95,7 @@ connections: [derrick-henry, platform-migration, 2026-04-10-onboarding-thoughts]
 
 ### Step 7: Write the Capture File
 
-**Filename:** `<captures>/YYYY-MM-DD-<slug>.md`, where `<captures>` is the value from the `Paths` table in the vault's `CLAUDE.md` (fallback `_inbox/captures/`).
+**Filename:** `<captures>/YYYY-MM-DD-<slug>.md`, where `<captures>` is the value from the `Paths` table in the vault's `CLAUDE.md`. If the table is missing, stop and tell the user to run `/obsidian-setup` — do not guess a path.
 
 **Before writing:** if `$OBSIDIAN_VAULT/<captures>/` doesn't exist, ask the user: *"The folder `<captures>/` doesn't exist in your vault. Create it? [y/n]"*. On `y`, run `mkdir -p "$OBSIDIAN_VAULT/<captures>"` and continue. On `n`, stop and tell them to create the folder or update the `captures` path in `CLAUDE.md`.
 

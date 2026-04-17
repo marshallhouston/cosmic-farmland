@@ -92,7 +92,7 @@ The script's `needs_llm_review` array contains files the pattern matcher flagged
 
 ## Step 4: Update Daily Note (if one exists for today)
 
-Check if today's daily note exists at `<daily_notes>/YYYY-MM-DD.md`, where `<daily_notes>` is the value from the `Paths` table in the vault's `CLAUDE.md` (fallback `_weekly/_daily/`).
+Check if today's daily note exists at `<daily_notes>/YYYY-MM-DD.md`, where `<daily_notes>` is the value from the `Paths` table in the vault's `CLAUDE.md`. If the table is missing, stop and tell the user to run `/obsidian-setup` — do not guess a path.
 
 If the `obsidian` CLI is installed, use `obsidian daily:append content="..."` — it handles path resolution natively. Otherwise edit the file directly.
 
