@@ -31,6 +31,36 @@ Pick one. Default = `sniff`.
 
 Level escalation = stricter burden of proof. Same audit structure, different threshold.
 
+## Lens (auto-inferred)
+
+A lens shifts the *framing* of PTVM questions toward a specific dimension. Level controls strictness; lens controls emphasis. Independent.
+
+Always auto-infer. Never ask the user. Never expose a flag.
+
+Fixed vocabulary:
+
+| Lens | When to apply | PTVM emphasis |
+|------|---------------|---------------|
+| `security` | auth, permissions, input handling, secrets, public endpoints | Real attacker reachability. Defense against fictional threats = KILL. |
+| `correctness` | data migrations, verifiers, parsers, math, state transitions | Edge cases, off-by-one, partial-failure recovery. Untested branches = SUSPECT. |
+| `perf` | hot paths, queries, loops over data, caching | Measured cost, not vibes. Speculative optimization = KILL. |
+| `simplicity` | refactors, abstractions, helpers, config systems | Caller count. One-caller abstractions = KILL at huff+. |
+| `ux` | UI, copy, flows, error messages | User-visible delta. Polish nobody sees = SUSPECT. |
+| `testing` | new test files, test harness, fixtures | Asserts behavior, not implementation. Tautological tests = KILL. |
+| `agent-native` | CLI tooling, agent tools, system prompts | Parity: every UI action also reachable by agent. |
+| `maintainability` | naming, structure, docs, dead-code removal | Future-reader cost. Comment bloat / dead tombstones = KILL. |
+| `general` | low-confidence inference or genuinely cross-cutting | Default PTVM rubric. |
+
+Inference signals (in order):
+
+1. **Target keywords** — `verify-*` → correctness, `auth*` → security, `migrate*` → correctness, `*-perf*` → perf, etc.
+2. **Diff content** — file paths (`src/db/`, `src/auth/`, `src/ui/`), changed APIs, test ratios.
+3. **Recent session context** — what the user has been working on, prior commits in this session, stated goals.
+
+If two lenses both score high, list both (max 2). If signals are weak / mixed, fall back to `general` and say so.
+
+State the lens at the top of the output (see format).
+
 ## Input resolution
 
 Figure out what to audit, in this order:
@@ -66,6 +96,8 @@ Match this shape (mirrors the example the user referenced):
 
 ```
 # Fart-Smell Audit — [level] — [target]
+
+Lens: [lens(es)] — [one-line reason for inference]
 
 ## Per-commit verdicts
 
