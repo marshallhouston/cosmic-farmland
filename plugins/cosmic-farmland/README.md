@@ -34,3 +34,16 @@ In Claude Code:
 - `/execute-plan` — execute a written plan
 - `/fart-sniffing-detection [level] [target]` — run the skill above. Target = PR number, git range, `--staged`, or auto-detect current branch's open PR. Aliases: `/ptvm`, `/prove-the-value-motherfucker`.
 - `/granola-sync` — sync recent Granola meetings
+
+## Short-name resolution (`/ptv` returning "Unknown command")
+
+Claude Code resolves plugin commands under their namespaced form: `/cosmic-farmland:<name>`. The bare form (`/ptv`, `/next`, etc.) only resolves if a matching file exists in `~/.claude/commands/` as a **user-global shadow**. No shadow → bare name errors with "Unknown command: /ptv. Did you mean /ptvm?" even after `/plugin update` and `/reload-plugins`.
+
+Two ways to use bare names:
+
+1. **Use the namespaced form** — `/cosmic-farmland:ptv huff`. Always works.
+2. **Install a shadow** — copy the plugin command file to `~/.claude/commands/`:
+   ```
+   cp ~/.claude/plugins/cache/cosmic-farmland/cosmic-farmland/*/commands/ptv.md ~/.claude/commands/ptv.md
+   ```
+   Then `/reload-plugins`. Shadow is machine-local (not tracked in this repo) and must be re-copied per machine. Shadows drift from the plugin over time — prefer the namespaced form unless muscle memory demands otherwise.
