@@ -12,6 +12,7 @@ End-to-end tail for a PR: wait for green, merge, clean up.
 - PR is already pushed and open on GitHub.
 - You are in the worktree (or repo) where the branch lives.
 - The diff has been reviewed/tested to the extent the task warrants.
+- Repo uses squash-merge + delete-branch workflow. If not, edit step 5 for your repo's merge strategy.
 
 If these aren't true, stop and tell the user.
 
@@ -54,10 +55,7 @@ If these aren't true, stop and tell the user.
 
 ## When things go wrong
 
-- CI check fails → follow step 3a automatically: pull logs, diagnose root cause, check if merge is actually blocked, act accordingly. Never stop at "classify failed, investigate?".
 - A check stays pending after watch exits → re-run `gh pr checks <pr> --watch`.
-- Merge blocked by review required / conflicts → report state and stop.
-- Worktree cleanup fails because of uncommitted files → stop, tell the user what's there.
 
 ## Principle
 
