@@ -36,6 +36,7 @@ In Claude Code:
 - `/fart-sniffing-detection [level] [target]` — run the skill above. Target = PR number, git range, `--staged`, or auto-detect current branch's open PR. Aliases: `/ptvm`, `/prove-the-value-motherfucker`.
 - `/feedback-triage <source>` — triage a pasted feedback blob from a named source (runs the `feedback-triage` skill)
 - `/granola-sync` — sync recent Granola meetings
+- `/ship [pr-number]` — watch a PR's checks, merge when green, clean up worktree + local branch. Defaults to current branch's PR.
 
 ## Short-name resolution (`/ptv` returning "Unknown command")
 
