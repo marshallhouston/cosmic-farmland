@@ -93,7 +93,9 @@ hand-wrap tokens: `<span class="keyword">def</span>`, `<span class="string">"x"<
    ```bash
    "${CLAUDE_PLUGIN_ROOT}/skills/slideshow/scripts/build.sh" <output-dir>
    ```
-   Produces `slide-NN.png` for each slide and a single combined `slideshow.pdf`.
+   Produces `slide-NN.png` for each slide (2160x2700, DPR=2 for crisp zoom) and a single combined `slideshow.pdf` (PDF page geometry stays 1080x1350 px). Override DPR with `SLIDESHOW_DPR=1` (or 3) if needed.
+
+   The build runs `scripts/check.sh` first and aborts on voice violations (em-dashes, fake attributions, invented precision, coach register, Title-Case headings). Fix the copy rather than bypassing. Set `SLIDESHOW_SKIP_CHECK=1` only with a real reason.
 7. **Report.** List what you produced, with absolute paths. Tell the user the PDF is what they upload to LinkedIn (LinkedIn renders PDFs as swipeable carousels). Tell them where the caption is.
 
 ## Copywriting rules

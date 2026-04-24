@@ -157,6 +157,25 @@ before running `build.sh`, re-read every slide and every caption line:
    a concrete description of the thing.
 7. more than one adjective per slide? cut.
 
+## anti-patterns caught in dogfood
+
+these came up in real builds. `scripts/check.sh` blocks them at build time.
+keep adding to this list as new ones surface.
+
+- **fake-source attributions.** a pull-quote needs a real source. `-- field
+  notes`, `-- night log`, `-- a wise dev` all signal "i invented this quote
+  to sound wise." either cite a real artifact (`from ship.md`, `from the
+  three-little-workflows post`) or drop the attribution.
+- **invented precision.** `3:14 am`, `exactly 47 prs`, `it took 11 minutes
+  and 4 seconds` read specific but are made up. if the number/time is real,
+  cite a source (commit hash, log line, pr #). if not, don't fabricate.
+- **coach register phrases.** `where do you fall?`, `which one are you?`,
+  `here's what nobody tells you`, `counterintuitive:`, `unlock your X`,
+  `game-changing`, `the ultimate`. all auto-kill.
+- **stacked imperatives to the reader.** `pull ship.md. run it on a pr.
+  notice where your hand goes.` each line commands the reader to a new
+  action. keep ctas to one concrete step or drop the slide.
+
 ## source
 
 - `~/code/marshallhouston.wtf/CLAUDE.md` -- canonical voice rules
@@ -168,3 +187,4 @@ before running `build.sh`, re-read every slide and every caption line:
   philosophical register, still grounded
 - `~/code/marshallhouston.wtf/_posts/2026-04-22-unpromptable-linkedin-flip.md`
   -- satire. **anti-sample.** never imitate.
+- `scripts/check.sh` -- mechanical enforcement of the rules above

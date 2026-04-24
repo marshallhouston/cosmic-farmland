@@ -70,23 +70,36 @@ fi
 log="$dir/.slideshow-build.log"
 : > "$log"
 
+# Run voice checks before rendering. Non-zero from check.sh aborts the
+# build. Override a specific run with SLIDESHOW_SKIP_CHECK=1 if you have
+# a real reason (rare).
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if ! "$script_dir/check.sh" "$dir"; then
+  exit 1
+fi
+
 # Sort slides by filename so slide-01 comes before slide-02 ... slide-10.
 IFS=$'\n' slides=( $(printf '%s\n' "${slides[@]}" | sort) )
 unset IFS
 
 echo "slides: ${#slides[@]}"
 
-# 1) Render each slide to PNG at exact carousel size.
+# 1) Render each slide to PNG. We render at 2x device scale so the
+#    bitmap stays crisp when a viewer zooms into the PDF. PDF page
+#    geometry stays 1080x1350 px; the embedded image just has 4x the
+#    pixels (2160x2700). Override with SLIDESHOW_DPR=1 or 3 if needed.
+dpr="${SLIDESHOW_DPR:-2}"
 for slide in "${slides[@]}"; do
   base="$(basename "$slide" .html)"
   out="$dir/$base.png"
-  echo "  -> $base.png"
+  echo "  -> $base.png (dpr=$dpr)"
   if ! "$chrome" \
       --headless=new \
       --disable-gpu \
       --no-sandbox \
       --hide-scrollbars \
       --default-background-color=00000000 \
+      --force-device-scale-factor="$dpr" \
       --window-size=1080,1350 \
       --screenshot="$out" \
       "file://$slide" \
