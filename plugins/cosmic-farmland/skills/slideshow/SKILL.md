@@ -98,12 +98,27 @@ hand-wrap tokens: `<span class="keyword">def</span>`, `<span class="string">"x"<
 
 ## Copywriting rules
 
+**Before writing any slide, read `VOICE.md` in this same directory.** It is the
+authoritative guide to marshall's voice (derived from `~/code/marshallhouston.wtf/CLAUDE.md`
+and the hookify rules on his site). It overrides anything below if they conflict.
+
+Highlights from `VOICE.md` (not a substitute for reading it):
+
+- **Lowercase everything** in the HTML source. Kickers render all-caps visually
+  via CSS; the content is still lowercase. Proper nouns keep their caps.
+- **No em-dashes (`--` dash dash or rephrase).** No en-dashes. Hard rule.
+- **First person, lowercase `i`.** `i built /ship`, not `I built /ship`.
 - **One idea per slide.** If a slide has two ideas, split it.
-- **Headlines are statements, not teasers.** "An SDR costs you $11k/month" beats "You won't believe what SDRs cost."
+- **Headlines are statements, not teasers.** `an sdr costs you $11k/month`
+  beats `you won't believe what sdrs cost`.
 - **Numbers earn attention.** Prefer concrete figures over adjectives.
-- **Cut adjectives ruthlessly.** "Great / powerful / amazing" adds nothing on a slide.
-- **Second person > first.** Write "you" not "we" unless quoting.
-- **Last slide is the close, not a recap.** Don't restate the hook; push to the CTA.
+- **Cut adjectives ruthlessly.** `great / powerful / amazing` adds nothing.
+- **Show the artifact.** Real commands, real commit hashes, real terminal
+  output. Do not paraphrase an artifact when you can paste it.
+- **Last slide is the close, not a recap.** Don't restate the hook.
+- **If it could have been written by any AI, rewrite it.**
+- **If it sounds like a LinkedIn post, burn it down.** Exception: `2026-04-22-unpromptable-linkedin-flip.md`
+  is explicit satire and is *not* a style to imitate.
 
 ## Brand
 
