@@ -175,6 +175,19 @@ html, body {
   background: var(--brand-accent);
 }
 
+/* Inline code inside prose -- bullets, steps, body text. Avoid the
+ * default mono inheriting a 34px bullet font size (looks shouty). */
+.bullets li code,
+.steps .step-body code,
+.body code {
+  font-family: var(--brand-font-mono);
+  font-size: 0.85em;
+  background: rgba(0, 0, 0, 0.06);
+  padding: 2px 10px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
 /* Numbered steps */
 .steps {
   list-style: none;

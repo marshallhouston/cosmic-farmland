@@ -51,7 +51,9 @@ All templates live in `templates/`. Each is a standalone HTML file sized 1080x13
 
 Prefer variety across a deck -- don't stack 5 bullet slides in a row. Mix stat/quote/bullets/code to create rhythm.
 
-**Size limits (avoid overflow):** bullets max 5, numbered steps max 5, code snippets max 12 lines, terminal output max 10 lines. Beyond these, content will clip the 1350px canvas.
+**Size limits (avoid overflow):** bullets max 5, numbered steps max 5, code snippets max 12 lines (and max ~50 chars per line -- the code block clips horizontally, not wraps), terminal output max 10 lines. Beyond these, content will clip the 1350px canvas.
+
+**Inline code in prose:** `<code>foo</code>` inside bullets, steps, or body text renders monospace with a subtle background pill. Useful for commands, flags, file paths in plain-English sentences. Keep to short fragments -- no `white-space: wrap`, so long code strings clip.
 
 **Fonts:** `_base.css` references Iowan Old Style, Inter, and JetBrains Mono. These are available on macOS or degrade to Palatino/system-ui/Menlo fallbacks. On Linux/CI, install those fonts or ship webfonts in `assets/fonts/` + an `@font-face` block.
 
