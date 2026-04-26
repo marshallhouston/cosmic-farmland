@@ -60,6 +60,11 @@ If these aren't true, stop and tell the user.
        CLOSED) echo "closed without merge"; exit 1 ;;
      esac
      [ -n "$FAILED" ] && { echo "failed: $FAILED"; break; }
+     # All-green-but-OPEN: auto-merge isn't going to fire. Break and let step 5 merge manually.
+     if [ "$STATE" = "OPEN" ] && [ -z "$PENDING" ] && [ -z "$FAILED" ] && [ "$PASSED" -gt 0 ]; then
+       echo "all green, OPEN with no auto-merge -- falling through to manual merge"
+       break
+     fi
      # Stall detector: 5 min with no state change → bail with snapshot.
      if [ $((SECONDS - STALL_START)) -gt 300 ]; then
        echo "STALL: no check state changed in 5 min. Bailing with snapshot above."
@@ -69,10 +74,12 @@ If these aren't true, stop and tell the user.
    done
    ```
    - `state: MERGED` means an auto-merge job (or admin merge) fired. Done. Skip step 4 (merge already happened) and go to step 6.
+   - `state: OPEN` with all checks green and no pending: auto-merge didn't fire (label applied late, classifier missed the PR, repo auto-merge disabled, etc.). Break out of the poll and continue to step 4 (verify mergeable) → step 5 (manual merge). Do NOT wait the full 5-min stall — we already know the answer.
    - Any check `FAILURE` while still `OPEN` triggers step 3a (investigate). Do not wait for other gates to also finish.
    - Hard cap total wait at 20 min. If still `OPEN` with only pending checks, report what's pending and stop.
    - Stall: 5 minutes with no state change → bail with the last snapshot. Either a check is genuinely hung (CI infra issue, external dep timeout) or the PR is gated on something not in the rollup (review required, branch protection waiting on a context).
    - Why poll-not-watch: `--watch` gives no output until done. On a hung check the user sees nothing for 10+ minutes and assumes the assistant froze. Tick output proves liveness and surfaces *which* check is slow.
+   - Why fall-through-on-green: incident 2026-04-26 PR #319 sat OPEN for 5 min after going green because `auto-merge-green` workflow only fires on `classify` completion and the label was applied manually after. The poll waited for MERGED that wasn't coming. Falling through to manual merge as soon as all-green removes the dead-wait. Defensive against label-applied-late, classifier-missed, repo-level auto-merge-disabled, and any other reason auto-merge fails to fire.
 
 3. **Verify required checks all passed.** Parse the final snapshot. Every check should have `conclusion: SUCCESS`. If anything is `FAILURE`, go to step 3a. Otherwise continue.
 
