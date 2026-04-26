@@ -130,8 +130,15 @@ const sectionMeta = {
 
 **Tables** for structured data with dark header row and alternating subtle row backgrounds.
 
-### 5. Save and share
-Save to the outputs directory and provide a `computer://` link.
+### 5. Save and auto-open
+
+Save to the outputs directory, then **immediately** open it:
+
+```bash
+open <path-to-built-doc.html>
+```
+
+Do not ask "want me to open it?". Open it. The user invoked this skill to review the doc, not to receive a link they then have to click. Surface the path in the response too so they can re-open later, but the first action is `open`.
 
 ## Content formatting guidelines
 
