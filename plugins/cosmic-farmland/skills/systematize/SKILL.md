@@ -1,6 +1,6 @@
 ---
 name: systematize
-description: "Promote a lesson from passive memory to active enforcement. Use when the user says /systematize, 'systematize this', 'memory is fallible', 'make this stick', 'turn this into a rule', or after any correction/learning that needs to survive session turnover. Picks the highest viable enforcement tier (hook > CI gate > script > doc > memory) and ships the artifact."
+description: "Promote lesson from memory to enforcement (hook>CI>script>doc>memory). Picks highest tier, ships artifact. Triggers: /systematize, 'make this stick', 'turn into a rule', after corrections."
 argument-hint: "[lesson description] -- e.g. '/systematize never commit seed files without URL verification'"
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: feedback-triage
-description: Intake raw feedback from a person, categorize and triage each item into structured actionable units, then optionally spawn worktrees for accepted items. Use when the user says "triage this feedback", "categorize feedback from X", "rip on this", "/feedback-triage", or pastes a block of feedback from a named source (co-founder, user, tester) and wants per-item decisions. Not for single-bug reports, PR review comments, or section-by-section file review (use `/feedback` for that last one).
+description: Triage raw feedback into structured items, optionally spawn worktrees for accepted ones. Triggers: "triage feedback", "rip on this", "/feedback-triage", or pasted block from named source. Not for single bugs or file review (use /feedback).
 ---
 
 # Feedback Triage

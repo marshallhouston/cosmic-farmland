@@ -1,6 +1,6 @@
 ---
 name: golf-tee-times
-description: Check available golf tee times across marshall's bookmarked Denver-area courses on a given date, filtered by player count, time window, and hole count. Use this skill whenever marshall asks about tee times, checking for available golf slots, booking golf, "when can I play", checking golf availability, or any request to search multiple golf courses for open tee times. This skill handles 11 specific Denver-area courses spanning five different booking platforms (CPS Golf, TeeItUp, MemberSports, ClubCaddie, EZLinks) and knows the quirks of each one. Use it proactively even if marshall doesn't explicitly say "tee times" — phrases like "can I play golf Saturday morning" or "find me a round this weekend" should trigger it too.
+description: Check tee times across 11 Denver courses (CPS/TeeItUp/MemberSports/ClubCaddie/EZLinks), filtered by date/players/time/holes. Triggers: "tee times", "play golf", "when can I play", "find a round".
 ---
 
 # Golf tee times
