@@ -1,0 +1,12 @@
+/ship is a classifier, not a button.
+
+every ci result resolves to one of four colors. green means merge. yellow means flake, re-run once. blue means cosmetic non-required check on a mergeable pr, ship through. red means real blocker, name the file and line, stop.
+
+the value of /ship is not "i automated my merge." it is "i wrote down the rules for what each color means, and now i don't argue with them at 11pm."
+
+build the classifier. then trust the classifier.
+
+ship.md is in the repo: github.com/marshallhouston/cosmic-farmland. fork it or steal the four colors and write your own.
+
+---
+slides below. swipe.

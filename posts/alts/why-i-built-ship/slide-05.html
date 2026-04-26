@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Slide 05 -- Code</title>
+  <link rel="stylesheet" href="_base.css">
+</head>
+<body>
+  <section class="slide">
+    <header class="brand-header">
+      <div class="brand-logo-fallback">cosmic-farmland</div>
+      <div class="brand-rule"></div>
+    </header>
+
+    <div class="slide-main top">
+      <div class="kicker">the core loop</div>
+      <h2 class="subhead">trust CI. don't ask.</h2>
+      <pre class="code-block"><code><span class="comment"># wait</span>
+gh pr checks <span class="string">"$pr"</span> --watch
+
+<span class="comment"># verify</span>
+ok=$(gh pr view <span class="string">"$pr"</span> -q .mergeable)
+[[ <span class="string">"$ok"</span> == MERGEABLE ]] <span class="keyword">||</span> exit 1
+
+<span class="comment"># ship</span>
+gh pr merge <span class="string">"$pr"</span> --squash --delete-branch</code></pre>
+    </div>
+
+    <div class="brand-watermark"></div>
+  </section>
+</body>
+</html>

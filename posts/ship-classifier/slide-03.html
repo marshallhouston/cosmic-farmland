@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>d03</title><link rel="stylesheet" href="_base.css"></head>
+<body><section class="slide">
+  <header class="brand-header"><div class="brand-logo-fallback">cosmic-farmland</div><div class="brand-rule"></div></header>
+  <div class="slide-main top">
+    <div class="kicker">the gates</div>
+    <h2 class="subhead">two questions decide everything.</h2>
+    <pre class="code-block"><code><span class="comment"># is github willing to merge?</span>
+gh pr view <span class="string">"$pr"</span> --json mergeable,mergeStateStatus
+
+<span class="comment"># is the failure on a required check?</span>
+gh pr view <span class="string">"$pr"</span> --json statusCheckRollup
+
+<span class="comment"># mergeable=true + non-required failure -&gt; blue.</span>
+<span class="comment"># mergeable=false + required failure   -&gt; red.</span>
+<span class="comment"># transient signal in the log           -&gt; yellow.</span></code></pre>
+  </div>
+  <div class="brand-watermark"></div>
+</section></body></html>

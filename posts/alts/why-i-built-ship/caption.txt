@@ -1,0 +1,12 @@
+shipping a pr used to mean 6 context switches. now it's one command.
+
+i built /ship after i caught myself refreshing a pr tab waiting for CI. classic bike-shed work. valuable-feeling, zero value.
+
+the skill watches checks, investigates failures instead of punting them back to me, squash-merges, deletes the branch, removes the worktree, pulls main. then shuts up.
+
+the principle: a failing check is a signal, not a dead-end. if it failed, look. if it's flaky, re-run once. if it's cosmetic on a non-required check, merge through.
+
+lives in cosmic-farmland on github. take the ideas and run.
+
+---
+slides below. swipe.
