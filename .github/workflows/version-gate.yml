@@ -1,0 +1,17 @@
+name: Plugin version gate
+on:
+  pull_request:
+    paths:
+      - "plugins/**"
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Verify plugin versions bumped on source change
+        run: bash scripts/check-plugin-version.sh
+        env:
+          BASE_REF: origin/${{ github.base_ref }}
