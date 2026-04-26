@@ -1,6 +1,6 @@
 ---
 name: slideshow
-description: "Generate an on-brand LinkedIn/Instagram carousel from a topic or outline using reusable HTML templates. Produces numbered HTML slides, per-slide PNGs, a combined PDF, and a draft caption. Triggers include 'slideshow', 'carousel', 'LinkedIn post with slides', 'make slides', 'turn this into a carousel', 'deck for LinkedIn'."
+description: "LinkedIn/IG carousel from topic/outline. HTML slides + PNGs + PDF + caption. Triggers: 'slideshow', 'carousel', 'make slides', 'deck for LinkedIn'."
 ---
 
 # Slideshow -- On-brand Carousel Builder

@@ -64,6 +64,47 @@ fi
 
 echo ""
 
+# --- Stale Claude Code plugin caches ---
+PLUGINS_JSON=~/.claude/plugins/installed_plugins.json
+CACHE_ROOT=~/.claude/plugins/cache
+if [ -f "$PLUGINS_JSON" ] && [ -d "$CACHE_ROOT" ]; then
+    STALE_MB=$(python3 - <<'PY'
+import json, os, shutil
+with open(os.path.expanduser("~/.claude/plugins/installed_plugins.json")) as f:
+    d = json.load(f)
+active = set()
+for installs in d.get("plugins", {}).values():
+    if isinstance(installs, list):
+        for inst in installs:
+            p = inst.get("installPath", "")
+            if p:
+                active.add(os.path.realpath(p))
+root = os.path.expanduser("~/.claude/plugins/cache")
+removed_bytes = 0
+for marketplace in os.listdir(root):
+    mp = os.path.join(root, marketplace)
+    if not os.path.isdir(mp): continue
+    for plugin in os.listdir(mp):
+        pp = os.path.join(mp, plugin)
+        if not os.path.isdir(pp): continue
+        for ver in os.listdir(pp):
+            vp = os.path.join(pp, ver)
+            if not os.path.isdir(vp): continue
+            real = os.path.realpath(vp)
+            if real in active: continue
+            sz = sum(os.path.getsize(os.path.join(r,f)) for r,_,fs in os.walk(vp) for f in fs)
+            removed_bytes += sz
+            shutil.rmtree(vp)
+print(removed_bytes // 1048576)
+PY
+)
+    echo "## Stale plugin caches: cleared ${STALE_MB}MB"
+else
+    echo "## Stale plugin caches: no installed_plugins.json"
+fi
+
+echo ""
+
 # --- Final state ---
 echo "## After cleanup"
 diskutil apfs list disk3 2>/dev/null | grep -E "Capacity (In Use|Not Allocated)"

@@ -1,6 +1,6 @@
 ---
 name: handoff
-description: "Generate a self-contained resumption prompt for continuing work in a fresh session after /clear. This skill should be used when the user says 'handoff', 'resumption prompt', 'prompt for a fresh session', 'prompt to continue this', 'clear context', 'pickup prompt', 'prompt to address next steps in a clear context', 'generate a prompt for after clear', or any variation of wanting to capture current progress and next steps as a paste-able prompt for a new session. Also trigger when the user asks to 'wrap up' or 'pause here' and wants to continue later."
+description: "Generate self-contained resumption prompt for fresh session after /clear. Triggers: 'handoff', 'resumption prompt', 'pickup prompt', 'wrap up', 'pause here', 'prompt for new session'."
 ---
 
 # Handoff -- Resumption Prompt Generator

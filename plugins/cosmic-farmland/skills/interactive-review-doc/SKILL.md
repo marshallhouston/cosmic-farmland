@@ -1,6 +1,6 @@
 ---
 name: interactive-review-doc
-description: "Create interactive HTML review documents with a side-by-side feedback panel. Use this skill whenever the user asks to create a reviewable document, interactive review doc, feedback doc, or anything where they want to review content and leave section-by-section feedback that can be copied to clipboard. Also use when the user says 'review doc', 'review flow', 'feedback flow', 'interactive doc', or asks for any document with a feedback/notes/comments panel alongside the content. This skill should trigger even when the user doesn't explicitly mention 'review' — if they're creating a report, guide, plan, or any structured content and mention wanting to give feedback, iterate on it, or copy notes back into Claude, this is the right skill."
+description: "Create interactive HTML review docs with side panel for per-section feedback, copy-to-clipboard as markdown. Triggers: 'review doc', 'feedback doc', 'interactive doc', or any structured content where user wants to iterate via copied notes."
 ---
 
 # Interactive Review Document Skill

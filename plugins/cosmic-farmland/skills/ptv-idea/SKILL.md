@@ -1,6 +1,6 @@
 ---
 name: ptv-idea
-description: "Audit a proposal, plan, or idea BEFORE it becomes a diff. Same PTVM rubric as /fart-sniffing-detection but input is a written idea, not commits. Use when the user says /ptv-idea, /ptvi, /prove-the-value-idea, 'ptv this idea', 'is this worth building?', 'audit this proposal', 'sanity-check this plan', or presents a spec/bullet list/brainstorm and wants skeptical review before any code gets written."
+description: "PTVM audit of an idea/proposal/plan BEFORE diff. Triggers: /ptv-idea, /ptvi, 'is this worth building', 'audit this proposal', 'sanity-check this plan'."
 argument-hint: "[level] <idea text | path to spec | 'last turn'>  e.g. 'huff add dark mode toggle', 'sniff docs/SMOKE_LEDGER_PLAN.md'"
 ---
 
