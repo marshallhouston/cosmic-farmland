@@ -78,6 +78,16 @@ CC default `cleanupPeriodDays` ~30. To keep longer history: set in `~/.claude/se
 ```
 or `0` for never. Worth bumping now so we have more data to mine when prototyping.
 
+## Shipped systematizations
+
+- **no-reasking Stop hook** (2026-04-27, plugin v1.4.2) -- detects re-asking patterns in last assistant text, warns to stderr + logs to `~/.claude/cc-friction-log.jsonl`. Baseline before hook: 237 re_asking / 7d preach-hub.
+- **`/wrap` command** (2026-04-27) -- ship + handoff combo. Replaces 13 `/ship -> /handoff` sequences (7d baseline).
+- **`/ship-all` command** (2026-04-27) -- drains open-PR queue with single confirmation. Replaces 49 `/ship -> /ship` invocations (7d baseline, 27 sessions).
+
+## Punted
+
+- **`/plugin -> /reload-plugins` auto-chain.** Slash commands are CC-harness-internal, not assistant tool calls. Hooks fire on tool calls. Assistant cannot invoke `/reload-plugins` programmatically. The `/plugin` output already prints "Run /reload-plugins to apply." UX-side reminder exists; real auto-chain would require CC harness change. Skip until CC adds slash-command hooks or `/plugin` itself auto-reloads.
+
 ## Calibration run (2026-04-27, 3 sessions from 2026-04-26)
 
 Sessions picked by total_billable_in:
