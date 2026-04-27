@@ -78,6 +78,38 @@ CC default `cleanupPeriodDays` ~30. To keep longer history: set in `~/.claude/se
 ```
 or `0` for never. Worth bumping now so we have more data to mine when prototyping.
 
+## Calibration run (2026-04-27, 3 sessions from 2026-04-26)
+
+Sessions picked by total_billable_in:
+
+| session_id | msgs | tokens | cache hit | duration |
+|---|---|---|---|---|
+| 011dcfcb | 343 | 82M | 92% | 158min |
+| cfbd10a6 | 340 | 78M | 98% | 108min |
+| 38499184 | 296 | 35M | 92% | 1282min |
+
+**Signal confirmed.** ~15-20 friction moments per session, repeats hold across all 3.
+
+### Friction taxonomy (v0)
+
+| Type | Example evidence | Heuristic |
+|---|---|---|
+| **Copy clarity** | "what do you mean call out overrides", "apply all i don't follow", "ahh 328 is issue not pr" | regex `i don.t (follow\|understand)\|what.*mean\|huh\?` in user msg |
+| **Re-asking** | 10x "yes" / 5x "y" in single session - model asks "want me to X?" after established pref | short user msg `^(yes\|y\|do it\|go\|ok)$` after assistant Q ending in `?` |
+| **Hard interrupt** | `[Request interrupted by user]` | exact string match |
+| **Stall** | "319 PR took 5 min with no clear progress", "why did 319 take so long" | user msg w/ time-reference + "no progress\|too long\|slow" |
+| **Drift / rule violation** | "reminder we don't work in sprints" (already CLAUDE.md rule) | user msg `(reminder\|don't\|stop)` + repo CLAUDE.md keyword |
+| **Status begging** | "status 336?", "what's in 334", "status of qa stories" | regex `\bstatus\b\s*\d+\|what.s in\s+\d+` |
+
+### Tool: `cc-friction-peek <session_id>`
+
+Lives at `bin/cc-friction-peek`. Prints user msgs, tool sequences, top-output assistant msgs. Hardcoded to preach-hub project dir for now (calibration). Run as: `cc-friction-peek <uuid>`.
+
 ## Next concrete step
 
-Pick 1 high-token session from yesterday, hand-craft friction-extraction prompt, eyeball output. No code yet. Validate signal exists before building pipeline.
+Build a heuristic-only friction scanner: walk last 7d sessions, apply taxonomy regexes, output top-N candidates ranked by recurrence x severity. **No LLM yet.** If heuristics alone give actionable signal, wrap in skill. If too noisy, add LLM classifier on filtered candidates.
+
+Promote winners through `/systematize`:
+- Re-asking pattern: already in CLAUDE.md output discipline rule #4. Need PreToolUse hook gating "want me to" / "should I" in assistant text? Or compile prompt example reinforcement.
+- Drift on no-sprints rule: CLAUDE.md exists, model still violates. Hook on assistant output catching banned phrases?
+- Copy clarity in skills: audit skill text against confused phrasings. `/qa-triage` "apply all" / "call out overrides" specific.

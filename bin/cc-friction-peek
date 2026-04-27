@@ -1,0 +1,124 @@
+#!/usr/bin/env python3
+"""Surface friction-candidate moments in a single CC session JSONL.
+
+Outputs:
+  - all user text messages (corrections/redirections live here)
+  - tool calls per name w/ retry sequences (3+ same tool in a row)
+  - top-5 output-token msgs (long explanations / big diffs — possible waste)
+  - hook-block events (PreToolUse non-zero exit)
+"""
+import json
+import sys
+import os
+from collections import defaultdict
+
+if len(sys.argv) < 2:
+    print("usage: cc-friction-peek.py <session_id>", file=sys.stderr)
+    sys.exit(1)
+
+session_id = sys.argv[1]
+path = f"/Users/marshallhouston/.claude/projects/-Users-marshallhouston-code-preach-hub/{session_id}.jsonl"
+
+if not os.path.exists(path):
+    print(f"not found: {path}", file=sys.stderr)
+    sys.exit(1)
+
+events = []
+with open(path) as f:
+    for line in f:
+        try:
+            events.append(json.loads(line))
+        except Exception:
+            pass
+
+print(f"\n{'='*80}\nSESSION {session_id}  ({len(events)} events)\n{'='*80}\n")
+
+# 1. User text messages
+print("--- USER MESSAGES (friction often shows here) ---\n")
+user_idx = 0
+for i, e in enumerate(events):
+    if e.get("type") == "user":
+        msg = e.get("message", {})
+        content = msg.get("content")
+        text = ""
+        if isinstance(content, str):
+            text = content
+        elif isinstance(content, list):
+            for c in content:
+                if isinstance(c, dict) and c.get("type") == "text":
+                    text += c.get("text", "")
+        text = text.strip()
+        if not text or text.startswith("<"):
+            continue
+        # skip system reminders / tool results
+        if any(s in text for s in ["<system-reminder>", "tool_use_id", "<command-name>"]):
+            continue
+        user_idx += 1
+        snippet = text[:300].replace("\n", " ⏎ ")
+        print(f"[u{user_idx} @ev{i}] {snippet}{' ...' if len(text) > 300 else ''}\n")
+
+# 2. Tool retries (3+ same tool back-to-back)
+print("\n--- TOOL CALL SEQUENCES (3+ same tool in a row = possible flailing) ---\n")
+tool_seq = []
+for e in events:
+    if e.get("type") == "assistant":
+        msg = e.get("message", {})
+        content = msg.get("content", [])
+        if isinstance(content, list):
+            for c in content:
+                if isinstance(c, dict) and c.get("type") == "tool_use":
+                    tool_seq.append(c.get("name", "?"))
+
+# find runs of 3+
+runs = []
+i = 0
+while i < len(tool_seq):
+    j = i + 1
+    while j < len(tool_seq) and tool_seq[j] == tool_seq[i]:
+        j += 1
+    if j - i >= 3:
+        runs.append((tool_seq[i], j - i))
+    i = j
+for name, n in runs:
+    print(f"  {name} x{n}")
+if not runs:
+    print("  (none — no obvious retry flailing)")
+
+# tool name freq
+print("\nTool name frequency:")
+freq = defaultdict(int)
+for t in tool_seq:
+    freq[t] += 1
+for t, n in sorted(freq.items(), key=lambda x: -x[1])[:15]:
+    print(f"  {n:>4}  {t}")
+
+# 3. Top output token msgs (likely long explanations / wasteful)
+print("\n--- TOP 5 OUTPUT-TOKEN ASSISTANT MSGS (possible verbosity / big diff) ---\n")
+output_msgs = []
+for i, e in enumerate(events):
+    if e.get("type") == "assistant":
+        u = e.get("message", {}).get("usage", {})
+        if isinstance(u, dict):
+            output_msgs.append((u.get("output_tokens", 0), i, e.get("message", {})))
+output_msgs.sort(reverse=True)
+for tok, idx, m in output_msgs[:5]:
+    content = m.get("content", [])
+    preview = ""
+    if isinstance(content, list):
+        for c in content:
+            if isinstance(c, dict):
+                if c.get("type") == "text":
+                    preview = c.get("text", "")[:200]
+                    break
+                if c.get("type") == "tool_use":
+                    preview = f"[tool_use: {c.get('name')}]"
+                    break
+    print(f"  {tok:>5} tokens @ev{idx}: {preview.replace(chr(10), ' ')}\n")
+
+# 4. Compaction / context-overflow hints
+print("\n--- COMPACTION / CONTEXT EVENTS ---\n")
+for i, e in enumerate(events):
+    t = e.get("type", "")
+    if "compact" in t.lower() or e.get("isCompactSummary"):
+        print(f"  ev{i}: {t}")
+print()
