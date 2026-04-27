@@ -158,18 +158,46 @@ def scan_session(path):
 
         elif t == "assistant":
             text = extract_text(msg)
-            if not text:
-                continue
-            text_lower = text.lower()
-            if any(kw in text_lower for kw in SAFE_CONTEXT):
-                continue
-            for ftype, pats in ASSISTANT_PATTERNS.items():
-                for pat in pats:
-                    m = pat.search(text)
-                    if m:
-                        snippet = text[max(0, m.start() - 40):m.end() + 80].replace("\n", " ")
-                        hits[ftype].append((i, snippet))
-                        break
+            if text:
+                text_lower = text.lower()
+                if not any(kw in text_lower for kw in SAFE_CONTEXT):
+                    for ftype, pats in ASSISTANT_PATTERNS.items():
+                        for pat in pats:
+                            m = pat.search(text)
+                            if m:
+                                snippet = text[max(0, m.start() - 40):m.end() + 80].replace("\n", " ")
+                                hits[ftype].append((i, snippet))
+                                break
+
+    # tool_flailing: same tool repeated in a row past threshold
+    # Bash threshold high (legit multi-step shell common); other tools low (repeat = uncertainty signal)
+    FLAIL_THRESHOLDS = {"Bash": 10, "Read": 6, "Edit": 6, "Grep": 6, "_default": 5}
+    tool_seq = []
+    for i, line in enumerate(lines):
+        try:
+            d = json.loads(line)
+        except Exception:
+            continue
+        if d.get("type") != "assistant":
+            continue
+        msg = d.get("message", {})
+        content = msg.get("content", []) if isinstance(msg, dict) else []
+        if isinstance(content, list):
+            for c in content:
+                if isinstance(c, dict) and c.get("type") == "tool_use":
+                    tool_seq.append((i, c.get("name", "?")))
+
+    j = 0
+    while j < len(tool_seq):
+        k = j + 1
+        while k < len(tool_seq) and tool_seq[k][1] == tool_seq[j][1]:
+            k += 1
+        run_len = k - j
+        threshold = FLAIL_THRESHOLDS.get(tool_seq[j][1], FLAIL_THRESHOLDS["_default"])
+        if run_len >= threshold:
+            hits["tool_flailing"].append((tool_seq[j][0], f"{tool_seq[j][1]} x{run_len}"))
+        j = k
+
     return hits
 
 
