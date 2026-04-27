@@ -1,0 +1,210 @@
+#!/usr/bin/env python3
+"""Pattern miner over CC session JSONL.
+
+Surfaces:
+  1. Tool-call n-grams (length 3-5) ranked by frequency x session-spread
+  2. Slash-command sequences (length 2-4)
+  3. Tool-frequency baseline per session
+
+Goal: find recurring workflows worth systematizing into skills.
+
+Usage: cc-pattern-mine [--days=N] [--project=NAME] [--all] [--top=N]
+
+Defaults: --days=7, scope=current-repo, --top=20.
+"""
+import json
+import os
+import re
+import sys
+import glob
+import subprocess
+from collections import Counter, defaultdict
+from datetime import datetime, timedelta, timezone
+
+ROOT = os.path.expanduser("~/.claude/projects")
+
+SLASH_INVOKE = re.compile(r"<command-name>(/[a-z0-9_:-]+)</command-name>", re.I)
+SLASH_PASTE = re.compile(r"^# (/[a-z0-9_:-]+)\b", re.I | re.M)
+
+# tool runs of these are usually noise (multi-Read or Bash bursts)
+COLLAPSE_RUNS = {"Read", "Bash", "Edit", "Grep"}
+
+
+def detect_repo_name():
+    try:
+        common = subprocess.check_output(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            stderr=subprocess.DEVNULL, text=True,
+        ).strip()
+        name = os.path.basename(os.path.dirname(common))
+        if name:
+            return name
+    except Exception:
+        pass
+    return os.path.basename(os.getcwd()) or None
+
+
+def parse_args():
+    days, top = 7, 20
+    project = detect_repo_name()
+    for arg in sys.argv[1:]:
+        if arg.startswith("--days="):
+            days = int(arg.split("=", 1)[1])
+        elif arg.startswith("--project="):
+            project = arg.split("=", 1)[1]
+        elif arg == "--all":
+            project = None
+        elif arg.startswith("--top="):
+            top = int(arg.split("=", 1)[1])
+    return days, project, top
+
+
+def extract_text(msg):
+    c = msg.get("content")
+    if isinstance(c, str):
+        return c
+    if isinstance(c, list):
+        return "\n".join(x.get("text", "") for x in c if isinstance(x, dict) and x.get("type") == "text")
+    return ""
+
+
+def collapse_consecutive(seq):
+    """Collapse runs of same tool to single entry (Read x5 -> Read)."""
+    out = []
+    for t in seq:
+        if out and out[-1] == t and t in COLLAPSE_RUNS:
+            continue
+        out.append(t)
+    return out
+
+
+def session_signals(path):
+    """Return (tool_seq_collapsed, slash_seq, tool_freq)."""
+    tools = []
+    slashes = []
+    tool_freq = Counter()
+
+    try:
+        with open(path) as f:
+            lines = f.readlines()
+    except Exception:
+        return tools, slashes, tool_freq
+
+    for line in lines:
+        try:
+            d = json.loads(line)
+        except Exception:
+            continue
+        t = d.get("type")
+        msg = d.get("message", {})
+        if not isinstance(msg, dict):
+            continue
+
+        if t == "assistant":
+            content = msg.get("content", [])
+            if isinstance(content, list):
+                for c in content:
+                    if isinstance(c, dict) and c.get("type") == "tool_use":
+                        name = c.get("name", "?")
+                        tools.append(name)
+                        tool_freq[name] += 1
+
+        elif t == "user":
+            text = extract_text(msg)
+            if not text:
+                continue
+            for m in SLASH_INVOKE.finditer(text):
+                slashes.append(m.group(1))
+            for m in SLASH_PASTE.finditer(text[:200]):
+                slashes.append(m.group(1))
+
+    return collapse_consecutive(tools), slashes, tool_freq
+
+
+def ngrams(seq, n):
+    if len(seq) < n:
+        return []
+    return [tuple(seq[i:i + n]) for i in range(len(seq) - n + 1)]
+
+
+def main():
+    days, project, top = parse_args()
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+
+    files = []
+    for path in glob.glob(os.path.join(ROOT, "*", "*.jsonl")):
+        if project and project not in os.path.basename(os.path.dirname(path)):
+            continue
+        try:
+            mtime = datetime.fromtimestamp(os.path.getmtime(path), timezone.utc)
+        except Exception:
+            continue
+        if mtime < cutoff:
+            continue
+        files.append(path)
+
+    print(f"scope: {project or 'all'}  window: last {days}d  files: {len(files)}\n")
+
+    # tool n-grams
+    tool_ngram_count = defaultdict(Counter)  # n -> Counter[tuple]
+    tool_ngram_sessions = defaultdict(lambda: defaultdict(set))  # n -> tuple -> set(sid)
+    slash_ngram_count = defaultdict(Counter)
+    slash_ngram_sessions = defaultdict(lambda: defaultdict(set))
+    overall_tool_freq = Counter()
+    sessions_with_tools = 0
+
+    for path in files:
+        sid = os.path.splitext(os.path.basename(path))[0]
+        tools, slashes, freq = session_signals(path)
+        if tools:
+            sessions_with_tools += 1
+            overall_tool_freq.update(freq)
+            for n in (3, 4, 5):
+                for ng in ngrams(tools, n):
+                    tool_ngram_count[n][ng] += 1
+                    tool_ngram_sessions[n][ng].add(sid)
+        for n in (2, 3, 4):
+            for ng in ngrams(slashes, n):
+                slash_ngram_count[n][ng] += 1
+                slash_ngram_sessions[n][ng].add(sid)
+
+    print("=" * 70)
+    print(f"OVERALL TOOL FREQUENCY ({sessions_with_tools} sessions w/ tools)")
+    print("=" * 70)
+    for tool, n in overall_tool_freq.most_common(20):
+        print(f"  {n:>6}  {tool}")
+
+    for n in (3, 4, 5):
+        print(f"\n{'=' * 70}")
+        print(f"TOP {top} TOOL {n}-GRAMS (freq x distinct-sessions)")
+        print(f"{'=' * 70}")
+        scored = []
+        for ng, count in tool_ngram_count[n].items():
+            sess = len(tool_ngram_sessions[n][ng])
+            if sess < 2:  # require at least 2 distinct sessions
+                continue
+            scored.append((count * sess, count, sess, ng))
+        scored.sort(reverse=True)
+        for score, count, sess, ng in scored[:top]:
+            print(f"  freq={count:>4}  sess={sess:>3}  {' -> '.join(ng)}")
+
+    print(f"\n{'=' * 70}")
+    print("SLASH-COMMAND SEQUENCES")
+    print("=" * 70)
+    for n in (2, 3, 4):
+        print(f"\n[{n}-grams]")
+        scored = []
+        for ng, count in slash_ngram_count[n].items():
+            sess = len(slash_ngram_sessions[n][ng])
+            if sess < 2:
+                continue
+            scored.append((count * sess, count, sess, ng))
+        scored.sort(reverse=True)
+        for score, count, sess, ng in scored[:10]:
+            print(f"  freq={count:>3}  sess={sess:>3}  {' -> '.join(ng)}")
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
