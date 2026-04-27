@@ -1,0 +1,16 @@
+{
+  "description": "cosmic-farmland plugin hooks",
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/no-reasking.py",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
