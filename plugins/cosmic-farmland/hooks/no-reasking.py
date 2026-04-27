@@ -32,6 +32,12 @@ PATTERNS = [
     r"\blet me know if you want\b",
     r"\bshall i\b",
     r"\bwant to\b.*\?",
+    # bare-prompt patterns surfaced by 2026-04-27 audit:
+    # assistant ends a long menu w/ single-word question, user can't tell which item it refers to
+    r"(?m)^which\??$",
+    r"(?m)^pick\??$",
+    r"(?m)^choose\??$",
+    r"(?m)^thoughts\?$",
 ]
 
 # whitelist phrases that legitimately need confirmation (destructive ops, ambiguous scope)

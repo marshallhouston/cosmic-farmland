@@ -78,6 +78,29 @@ CC default `cleanupPeriodDays` ~30. To keep longer history: set in `~/.claude/se
 ```
 or `0` for never. Worth bumping now so we have more data to mine when prototyping.
 
+## Audit pass (2026-04-27 PM): copy_clarity + interrupt
+
+Read all 18 copy_clarity + 25 interrupt hits w/ preceding assistant context.
+
+**copy_clarity findings:**
+
+- Bare-prompt menus: assistant lists options then ends w/ "Which?" / "Pick?" alone, user can't tell which question (5/18).
+- Jargon w/o context-check: assistant uses internal terms (trigger, file-as-issue, override) without defining (5/18).
+- "ah" pivots: user realizing/changing direction, NOT confusion. False positive (3/18). Removed from scanner.
+
+**interrupt findings:**
+
+- PR polling/watching dominant (10+/25): "Watch PR X checks", "Poll PR X state". Pre-dates 2026-04-26 /ship improvements.
+- AskUserQuestion tool fired 2x in one session, re-asking via tool call not text. Stop hook missed it.
+- TaskOutput / Agent / long Bash interrupts (rest).
+
+**Systematizations shipped from this audit:**
+
+- Friction scanner: drop `^ahh,` regex from copy_clarity (false positives).
+- no-reasking hook: added bare-prompt patterns (`^which\??$`, `^pick\??$`, `^choose\??$`, `^thoughts\?$`).
+- New PreToolUse hook (`no-asking-tool.py`): fires on `AskUserQuestion` w/o destructive-op context.
+- Bumps plugin 1.5.0 to 1.5.1.
+
 ## Shipped systematizations
 
 - **no-reasking Stop hook** (2026-04-27, plugin v1.4.2) -- detects re-asking patterns in last assistant text, warns to stderr + logs to `~/.claude/cc-friction-log.jsonl`. Baseline before hook: 237 re_asking / 7d preach-hub.

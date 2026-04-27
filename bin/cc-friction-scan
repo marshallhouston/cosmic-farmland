@@ -47,7 +47,7 @@ USER_PATTERNS = {
         re.compile(r"\bwhat (do|does) (you|that) mean\b", re.I),
         re.compile(r"\bnot clear\b", re.I),
         re.compile(r"\bhuh\?", re.I),
-        re.compile(r"^ahh?,?\s", re.I),  # "ahh, X is Y" realization
+        # NB: dropped /^ahh,/ -- audit 2026-04-27 showed these are user pivots, not confusion.
     ],
     "rule_drift": [
         re.compile(r"\breminder\b.*(don'?t|stop|no)", re.I),
