@@ -1,0 +1,187 @@
+#!/usr/bin/env python3
+"""
+Pick a stratified calibration sample from ~/cc-telemetry/sessions.csv.
+
+Strata:
+  - top 3 by total_billable_in (heavy)
+  - top 3 by duration_min     (long)
+  - 3 random from last 14d    (control)
+
+Filters:
+  - msg_count >= 20
+  - last_ts within --days (default 30)
+
+Dedupes across strata. Tries to span >=2 distinct project_dirs in final set.
+
+Outputs:
+  - prints a markdown table to stdout (session_id, stratum, project, msgs, tokens, dur)
+  - if --write: appends a dated calibration block to docs/cc-friction-systematizer.md
+
+Usage:
+  cc-friction-pick-calibration [--days 30] [--write] [--seed 0]
+"""
+import argparse
+import csv
+import datetime as dt
+import os
+import random
+import sys
+
+SESSIONS_CSV = os.path.expanduser("~/cc-telemetry/sessions.csv")
+# Resolve doc relative to this script: bin/<this> -> ../docs/<file>
+DEFAULT_DOC_PATH = os.path.normpath(
+    os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "..",
+        "docs",
+        "cc-friction-systematizer.md",
+    )
+)
+
+
+def parse_ts(s):
+    if not s:
+        return None
+    try:
+        return dt.datetime.fromisoformat(s)
+    except ValueError:
+        return None
+
+
+def load_sessions(days):
+    if not os.path.exists(SESSIONS_CSV):
+        sys.exit(f"missing {SESSIONS_CSV} — run cc-session-export first")
+    cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=days)
+    rows = []
+    with open(SESSIONS_CSV) as f:
+        for r in csv.DictReader(f):
+            try:
+                msgs = int(r["msg_count"])
+                tin = int(r["total_billable_in"] or 0)
+                dur = float(r["duration_min"] or 0)
+            except ValueError:
+                continue
+            last_ts = parse_ts(r["last_ts"])
+            if last_ts is None:
+                continue
+            if last_ts.tzinfo is None:
+                last_ts = last_ts.replace(tzinfo=dt.timezone.utc)
+            if last_ts < cutoff:
+                continue
+            if msgs < 20:
+                continue
+            r["_msgs"] = msgs
+            r["_tin"] = tin
+            r["_dur"] = dur
+            r["_last"] = last_ts
+            rows.append(r)
+    return rows
+
+
+def pick(rows, seed):
+    rng = random.Random(seed)
+    by_tin = sorted(rows, key=lambda r: r["_tin"], reverse=True)
+    by_dur = sorted(rows, key=lambda r: r["_dur"], reverse=True)
+    picks = []
+    seen = set()
+
+    def add(r, stratum):
+        if r["session_id"] in seen:
+            return False
+        seen.add(r["session_id"])
+        picks.append((stratum, r))
+        return True
+
+    # heavy
+    n = 0
+    for r in by_tin:
+        if n >= 3:
+            break
+        if add(r, "heavy"):
+            n += 1
+    # long
+    n = 0
+    for r in by_dur:
+        if n >= 3:
+            break
+        if add(r, "long"):
+            n += 1
+    # random control from last 14d
+    cutoff14 = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=14)
+    pool = [r for r in rows if r["_last"] >= cutoff14 and r["session_id"] not in seen]
+    rng.shuffle(pool)
+    n = 0
+    for r in pool:
+        if n >= 3:
+            break
+        if add(r, "random"):
+            n += 1
+
+    # diversity check
+    projects = {r["project_dir"] for _, r in picks}
+    if len(projects) < 2:
+        # swap in a random session from a different project
+        other = [
+            r for r in rows
+            if r["project_dir"] not in projects and r["session_id"] not in seen
+        ]
+        if other:
+            picks[-1] = ("random", other[0])
+    return picks
+
+
+def render_table(picks):
+    lines = [
+        "| session_id | stratum | project | msgs | tokens_in | dur_min | last_ts |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for stratum, r in picks:
+        proj = os.path.basename(r["project_dir"].rstrip("/")) or r["project_dir"]
+        lines.append(
+            f"| `{r['session_id'][:8]}` | {stratum} | {proj} | {r['_msgs']} | "
+            f"{r['_tin']:,} | {r['_dur']:.0f} | {r['_last'].date().isoformat()} |"
+        )
+    return "\n".join(lines)
+
+
+def append_to_doc(picks, table_md, doc_path):
+    if not os.path.exists(doc_path):
+        sys.exit(f"missing {doc_path}")
+    today = dt.date.today().isoformat()
+    header = f"## LLM-classifier calibration set ({today})"
+    with open(doc_path) as f:
+        existing = f.read()
+    if header in existing:
+        sys.exit(f"refusing: '{header}' already in {doc_path} (re-run would duplicate)")
+    block = (
+        f"\n{header}\n\n"
+        f"Stratified sample for cf:cc-friction skill validation gate. "
+        f"Picked by `cc-friction-pick-calibration`.\n\n"
+        f"{table_md}\n"
+    )
+    with open(doc_path, "a") as f:
+        f.write(block)
+    print(f"appended block to {doc_path}", file=sys.stderr)
+
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("--days", type=int, default=30)
+    p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--write", action="store_true")
+    p.add_argument("--doc", default=DEFAULT_DOC_PATH,
+                   help="path to systematizer doc (default: resolved from script location)")
+    args = p.parse_args()
+
+    rows = load_sessions(args.days)
+    if len(rows) < 9:
+        sys.exit(f"only {len(rows)} eligible sessions in last {args.days}d, need >=9")
+    picks = pick(rows, args.seed)
+    table = render_table(picks)
+    print(table)
+    if args.write:
+        append_to_doc(picks, table, args.doc)
+
+
+if __name__ == "__main__":
+    main()

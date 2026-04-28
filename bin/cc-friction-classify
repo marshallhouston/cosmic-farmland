@@ -1,0 +1,402 @@
+#!/usr/bin/env -S /Users/marshallhouston/.venvs/cc-friction/bin/python3
+"""
+LLM-classifier pass over heuristic friction candidates.
+
+For each (session_id, friction_type, line_idx) hit from the v0 taxonomy,
+slice ±N msgs of transcript context and ask Claude:
+  - is this real friction (y/n)?
+  - friction type (taxonomy or "other")?
+  - recommended fix tier (hook | skill | doc | prompt | none)?
+  - confidence 0..1
+  - one-sentence rationale
+
+Output: JSONL at ~/cc-telemetry/friction-classified.jsonl (resume-safe).
+
+Usage:
+  cc-friction-classify --sessions <id1,id2,...> [--days 30] [--per-session 20]
+                       [--context 5] [--model claude-sonnet-4-6]
+                       [--dry-run]
+
+Defaults:
+  --per-session 20   cap candidates per session to keep cost bounded
+  --context 5        msgs before+after each hit
+  --model claude-opus-4-7
+
+Reads sessions from --sessions (comma list) OR --from-doc (parses the
+calibration block in docs/cc-friction-systematizer.md).
+
+Auth: Reads Claude Max OAuth token from macOS keychain
+      ("Claude Code-credentials"). No ANTHROPIC_API_KEY needed.
+"""
+import argparse
+import datetime as dt
+import glob
+import hashlib
+import json
+import os
+import re
+import subprocess
+import sys
+from collections import defaultdict
+
+# Reuse heuristic taxonomy from cc-friction-scan via subprocess-free import.
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+
+try:
+    import anthropic  # type: ignore
+except ImportError:
+    anthropic = None  # only required for non-dry-run; check below
+
+ROOT = os.path.expanduser("~/.claude/projects")
+OUT_PATH = os.path.expanduser("~/cc-telemetry/friction-classified.jsonl")
+DOC_PATH = os.path.normpath(
+    os.path.join(HERE, "..", "docs", "cc-friction-systematizer.md")
+)
+
+USER_PATTERNS = {
+    "copy_clarity": [
+        re.compile(r"\bi don'?t (follow|understand|get it)\b", re.I),
+        re.compile(r"\bwhat (do|does) (you|that) mean\b", re.I),
+        re.compile(r"\bnot clear\b", re.I),
+        re.compile(r"\bhuh\?", re.I),
+    ],
+    "rule_drift": [
+        re.compile(r"\breminder\b.*(don'?t|stop|no)", re.I),
+        re.compile(r"\bwe don'?t\b.*(work|do|use)", re.I),
+        re.compile(r"\bstop\s+(doing|using)\b", re.I),
+    ],
+    "stall": [
+        re.compile(r"\b(took|taking)\s+(\d+\s+(min|minutes|hours)|so long|too long|forever)\b", re.I),
+        re.compile(r"\bno (clear )?progress\b", re.I),
+        re.compile(r"\bwhy.*(slow|so long)\b", re.I),
+    ],
+    "status_begging": [
+        re.compile(r"\bstatus\s+\d+\b", re.I),
+        re.compile(r"\bstatus\s+of\b", re.I),
+        re.compile(r"\bwhat'?s (in|on)\s+\d+\b", re.I),
+        re.compile(r"\bwhere are we\b", re.I),
+    ],
+    "interrupt": [re.compile(r"\[Request interrupted by user\]")],
+    "short_yes": [re.compile(r"^(yes|y|yep|yeah|ok|okay|do it|go|sure)\.?$", re.I)],
+}
+ASSISTANT_PATTERNS = {
+    "re_asking": [
+        re.compile(r"\bwant me to\b", re.I),
+        re.compile(r"\bshould i\b", re.I),
+        re.compile(r"\bdo you want\b", re.I),
+        re.compile(r"\bwould you like\b", re.I),
+        re.compile(r"\bshall i\b", re.I),
+    ],
+}
+
+SYSTEM_PROMPT = """You are auditing Claude Code (CC) session transcripts to identify real user friction for marshall (a power user, GitHub: marshallhouston).
+
+Marshall hates "want me to" / "should I" gating when the next step is obvious. He follows BFF (Build Friction Fix) and an aggressive output discipline rule: "If next action is obvious, just do it. Confirm only on irreversible/destructive operations."
+
+Friction taxonomy (v1):
+- copy_clarity: assistant text was confusing or under-defined; user expressed confusion
+- rule_drift: model violated a known rule (CLAUDE.md preference, sprint-language, memory-discipline, etc)
+- stall: long pauses, no-progress, slow tool loops
+- status_begging: user repeatedly asks for status of a PR/task because model didn't surface it
+- interrupt: hard interrupt of a tool/agent run
+- short_yes: model needlessly asked, user gave 1-word confirmation (yes/y/ok/do it)
+- re_asking: model asked "want me to X?" / "should I Y?" when next step was obvious
+- surface_and_defer: model SURFACED followup work without doing it (e.g. "Followups outside PR: ..."), forcing user to push "do it". Per CLAUDE.md output discipline: fixable bugs <5 tool calls = just fix, don't list.
+- missing_system: model had to ASK for info that should be queryable from a tracked source (feedback timestamps, PR status, etc). Indicates infra gap, not a per-message fix.
+- other: real friction not covered above
+- not_friction: false positive (user pivoted, changed mind, normal conversation, or model legitimately needed input)
+
+KEY CALIBRATIONS (learned from marshall hand-validation):
+1. **"Clear recommendation + redundant confirm" = friction.** If model presented a single primary recommendation (e.g. "Recommend B" / "Pilot vis-network") and then asked "Want me to spike?" / "Want me to scope?" — that IS friction. Mark re_asking. The recommendation itself made the next step obvious.
+2. **"State report + Or: alternatives" = friction (surface_and_defer).** If model gave primary "Next:" + alternatives below, that's option-bloat. User's bare "yes" doesn't pick one = ambiguous = friction.
+3. **Local branch/worktree GC is NOT destructive enough to warrant confirm.** Asking "Want me to clean stale branches?" = friction.
+4. **"Always worktrees" rule.** If model asked "want me to put on a branch?" without proposing a worktree, that's rule_drift (worktree-discipline).
+5. **Memory offers** ("Want me to save memory on...") = rule_drift, marshall has aggressive memory-discipline.
+6. **Genuine A/B/C design tradeoffs WITH distinct user-visible consequences** = NOT friction. Model right to ask. (e.g. "fix-now vs defer-and-triage-other-thing", "list-panel vs filtered-graph w/ different state semantics").
+7. **Information-gathering that the model genuinely needs and can't infer** = NOT friction. Unless that info should be in a tracked system → then mark missing_system.
+
+For each transcript slice, output STRICT JSON matching this schema:
+{
+  "is_friction": boolean,
+  "type": "copy_clarity|rule_drift|stall|status_begging|interrupt|short_yes|re_asking|surface_and_defer|missing_system|other|not_friction",
+  "fix_tier": "hook|skill|doc|prompt|none",
+  "confidence": number,
+  "rationale": "one sentence"
+}
+
+Rules:
+- fix_tier=none if is_friction=false
+- prefer hook>skill>doc>prompt (highest enforcement that fits)
+- confidence 0..1, calibrated (use 0.5-0.7 when ambiguous)
+- rationale <= 25 words
+"""
+
+
+def find_session_path(session_id):
+    matches = glob.glob(os.path.join(ROOT, "*", f"{session_id}*.jsonl"))
+    return matches[0] if matches else None
+
+
+def extract_text(msg):
+    c = msg.get("content")
+    if isinstance(c, str):
+        return c
+    if isinstance(c, list):
+        return "\n".join(b.get("text", "") for b in c if isinstance(b, dict) and b.get("type") == "text")
+    return ""
+
+
+def scan_one(path):
+    """Return list of (line_idx, friction_type, snippet)."""
+    hits = []
+    try:
+        with open(path) as f:
+            lines = f.readlines()
+    except Exception:
+        return hits, []
+    parsed = []
+    for i, line in enumerate(lines):
+        try:
+            parsed.append(json.loads(line))
+        except Exception:
+            parsed.append(None)
+    for i, d in enumerate(parsed):
+        if not d:
+            continue
+        t = d.get("type")
+        msg = d.get("message", {})
+        if not isinstance(msg, dict):
+            continue
+        text = extract_text(msg)
+        if not text:
+            continue
+        if t == "user":
+            text_s = text.strip()
+            if "<system-reminder>" in text_s or "tool_use_id" in text_s:
+                continue
+            if text_s.startswith("# /") or len(text_s) > 1500:
+                continue
+            for ftype, pats in USER_PATTERNS.items():
+                if any(p.search(text_s) for p in pats):
+                    hits.append((i, ftype, text_s[:200]))
+                    break
+        elif t == "assistant":
+            for ftype, pats in ASSISTANT_PATTERNS.items():
+                if any(p.search(text) for p in pats):
+                    hits.append((i, ftype, text[:200]))
+                    break
+    return hits, parsed
+
+
+def slice_around(parsed, idx, n):
+    lo = max(0, idx - n)
+    hi = min(len(parsed), idx + n + 1)
+    out = []
+    for j in range(lo, hi):
+        d = parsed[j]
+        if not d:
+            continue
+        role = d.get("type", "?")
+        text = extract_text(d.get("message", {}) or {})
+        if not text:
+            continue
+        marker = " <<< HIT" if j == idx else ""
+        out.append(f"[{j}] {role}{marker}:\n{text[:800]}")
+    return "\n\n".join(out)
+
+
+def hit_key(session_id, idx, ftype):
+    return f"{session_id}:{idx}:{ftype}"
+
+
+def load_done(out_path):
+    done = set()
+    if os.path.exists(out_path):
+        with open(out_path) as f:
+            for line in f:
+                try:
+                    r = json.loads(line)
+                    done.add(r["key"])
+                except Exception:
+                    continue
+    return done
+
+
+def parse_doc_calibration(path):
+    """Extract session ids from latest 'LLM-classifier calibration set' block."""
+    if not os.path.exists(path):
+        return []
+    with open(path) as f:
+        text = f.read()
+    # find last block
+    blocks = re.findall(
+        r"## LLM-classifier calibration set.*?\n(.*?)(?=\n## |\Z)",
+        text, re.S,
+    )
+    if not blocks:
+        return []
+    last = blocks[-1]
+    # extract `xxxxxxxx` ids (8-hex) — we'll resolve to full id via glob
+    return re.findall(r"`([0-9a-f]{8})`", last)
+
+
+def resolve_session_id(short_or_full):
+    if len(short_or_full) >= 32:
+        return short_or_full
+    matches = glob.glob(os.path.join(ROOT, "*", f"{short_or_full}*.jsonl"))
+    if not matches:
+        return None
+    return os.path.splitext(os.path.basename(matches[0]))[0]
+
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("--sessions", help="comma-separated session ids (8-hex prefix or full)")
+    p.add_argument("--from-doc", action="store_true",
+                   help="read session ids from latest calibration block in design doc")
+    p.add_argument("--per-session", type=int, default=20)
+    p.add_argument("--context", type=int, default=5)
+    p.add_argument("--model", default="claude-opus-4-7",
+                   help="default opus-4-7 for validation accuracy; haiku-4-5 for cheap pass")
+    p.add_argument("--dry-run", action="store_true",
+                   help="print candidate counts + first prompt, no API calls")
+    args = p.parse_args()
+
+    if args.from_doc:
+        ids = parse_doc_calibration(DOC_PATH)
+    elif args.sessions:
+        ids = [s.strip() for s in args.sessions.split(",") if s.strip()]
+    else:
+        sys.exit("need --sessions or --from-doc")
+
+    resolved = []
+    for sid in ids:
+        full = resolve_session_id(sid)
+        if not full:
+            print(f"warn: no jsonl for {sid}", file=sys.stderr)
+            continue
+        resolved.append(full)
+    if not resolved:
+        sys.exit("no sessions resolved")
+
+    os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
+    done = load_done(OUT_PATH)
+    print(f"resolved {len(resolved)} sessions, {len(done)} already classified", file=sys.stderr)
+
+    # collect candidates
+    all_candidates = []
+    for sid in resolved:
+        path = find_session_path(sid)
+        if not path:
+            continue
+        hits, parsed = scan_one(path)
+        # cap per session, prefer diverse types
+        by_type = defaultdict(list)
+        for h in hits:
+            by_type[h[1]].append(h)
+        capped = []
+        # round-robin
+        while len(capped) < args.per_session and any(by_type.values()):
+            for t in list(by_type):
+                if by_type[t]:
+                    capped.append(by_type[t].pop(0))
+                    if len(capped) >= args.per_session:
+                        break
+        for idx, ftype, snippet in capped:
+            k = hit_key(sid, idx, ftype)
+            if k in done:
+                continue
+            all_candidates.append((sid, path, parsed, idx, ftype, snippet, k))
+    print(f"{len(all_candidates)} candidates pending classification", file=sys.stderr)
+
+    if args.dry_run:
+        if all_candidates:
+            sid, _path, parsed, idx, ftype, _snip, _k = all_candidates[0]
+            print(f"\n--- sample slice (session {sid[:8]}, idx {idx}, type {ftype}) ---\n")
+            print(slice_around(parsed, idx, args.context))
+        return
+
+    if not all_candidates:
+        print("nothing to do", file=sys.stderr)
+        return
+
+    if anthropic is None:
+        sys.exit("missing dep: `pip3 install anthropic` (or pipx install anthropic)")
+    # Pull Claude Max OAuth token from macOS keychain (no API key needed).
+    try:
+        raw = subprocess.check_output(
+            ["security", "find-generic-password", "-s", "Claude Code-credentials", "-w"],
+            text=True, stderr=subprocess.DEVNULL,
+        ).strip()
+        oauth_token = json.loads(raw)["claudeAiOauth"]["accessToken"]
+    except Exception as e:
+        sys.exit(f"failed to read CC OAuth token from keychain: {e}")
+    client = anthropic.Anthropic(
+        auth_token=oauth_token,
+        default_headers={"anthropic-beta": "oauth-2025-04-20"},
+    )
+    out_f = open(OUT_PATH, "a")
+    n_ok = 0
+    n_err = 0
+
+    for sid, _path, parsed, idx, ftype, snippet, k in all_candidates:
+        slice_text = slice_around(parsed, idx, args.context)
+        user_msg = (
+            f"Session: {sid[:8]}\n"
+            f"Heuristic flagged type: {ftype}\n"
+            f"Hit at line {idx}.\n\n"
+            f"Transcript slice:\n{slice_text}\n\n"
+            f"Output ONLY the JSON object."
+        )
+        try:
+            resp = client.messages.create(
+                model=args.model,
+                max_tokens=512,
+                system=[
+                    {
+                        "type": "text",
+                        "text": SYSTEM_PROMPT,
+                        "cache_control": {"type": "ephemeral"},
+                    }
+                ],
+                messages=[{"role": "user", "content": user_msg}],
+            )
+            text = next((b.text for b in resp.content if b.type == "text"), "").strip()
+            # strip code fences if present
+            text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.M)
+            parsed_out = json.loads(text)
+            record = {
+                "key": k,
+                "session_id": sid,
+                "line_idx": idx,
+                "heuristic_type": ftype,
+                "snippet": snippet,
+                "model": args.model,
+                "ts": dt.datetime.utcnow().isoformat() + "Z",
+                "usage": {
+                    "input": resp.usage.input_tokens,
+                    "output": resp.usage.output_tokens,
+                    "cache_read": getattr(resp.usage, "cache_read_input_tokens", 0),
+                    "cache_create": getattr(resp.usage, "cache_creation_input_tokens", 0),
+                },
+                **parsed_out,
+            }
+            out_f.write(json.dumps(record) + "\n")
+            out_f.flush()
+            n_ok += 1
+            if n_ok % 5 == 0:
+                print(f"  classified {n_ok}/{len(all_candidates)}", file=sys.stderr)
+        except json.JSONDecodeError as e:
+            n_err += 1
+            print(f"json parse err on {k}: {e}", file=sys.stderr)
+        except Exception as e:
+            n_err += 1
+            print(f"err on {k}: {e}", file=sys.stderr)
+
+    out_f.close()
+    print(f"\ndone. ok={n_ok} err={n_err}  →  {OUT_PATH}", file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main()
