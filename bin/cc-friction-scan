@@ -83,6 +83,16 @@ ASSISTANT_PATTERNS = {
         re.compile(r"\bshall i\b", re.I),
         re.compile(r"\blet me know if you want\b", re.I),
     ],
+    # Hand-validation 2026-04-28 found a recurring pattern not in v0:
+    # model lists followups/loose-ends without doing them, forcing user to push "do it".
+    # Per CLAUDE.md output discipline #8: fixable bugs <5 tool calls = just fix, don't list.
+    "surface_and_defer": [
+        re.compile(r"^followups?\b.*:", re.I | re.M),
+        re.compile(r"^outstanding\b.*:", re.I | re.M),
+        re.compile(r"^loose ends\b.*:", re.I | re.M),
+        re.compile(r"^to do\b.*:", re.I | re.M),
+        re.compile(r"^remaining\b.*:", re.I | re.M),
+    ],
 }
 
 SAFE_CONTEXT = [

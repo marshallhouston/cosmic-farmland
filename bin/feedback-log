@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+"""
+Append a feedback entry to ~/marshall.notes/feedback.md.
+
+Marshall systematization 2026-04-28: model kept asking "when did X's feedback come in?"
+because no source of truth existed. Now there is one, queryable by source/date.
+
+Schema (one entry per call, prepended to top of file):
+
+    ## YYYY-MM-DD HH:MM tz — <source>
+    <body>
+
+Usage:
+    feedback-log --source <name> [--body "text"]
+    feedback-log --source tyler --body "explore page clicks broken"
+    feedback-log --source slack:#qa "bug in upload flow"     # positional body OK
+    cat note.md | feedback-log --source email:trud --stdin   # body from stdin
+
+Query (separate, just `grep`):
+    grep -A2 'tyler' ~/marshall.notes/feedback.md
+    grep -B1 '2026-04' ~/marshall.notes/feedback.md
+"""
+import argparse
+import datetime as dt
+import os
+import sys
+
+FEEDBACK = os.path.expanduser("~/marshall.notes/feedback.md")
+HEADER = "# Feedback log\n\nNewest first. One source of truth for inbound feedback. Each entry: `## ISO-date — source` then body.\n\n---\n"
+
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("--source", required=True,
+                   help="who/where (e.g. tyler, slack:#qa, email:trud)")
+    p.add_argument("--body", help="feedback text (omit for stdin)")
+    p.add_argument("--stdin", action="store_true", help="read body from stdin")
+    p.add_argument("body_pos", nargs="?", help="positional body (alternative to --body)")
+    args = p.parse_args()
+
+    if args.stdin:
+        body = sys.stdin.read().strip()
+    elif args.body:
+        body = args.body.strip()
+    elif args.body_pos:
+        body = args.body_pos.strip()
+    else:
+        sys.exit("need --body, positional body, or --stdin")
+
+    if not body:
+        sys.exit("empty body")
+
+    now = dt.datetime.now().astimezone()
+    ts = now.strftime("%Y-%m-%d %H:%M %Z")
+    entry = f"## {ts} — {args.source}\n\n{body}\n\n---\n\n"
+
+    # prepend (newest first)
+    if not os.path.exists(FEEDBACK):
+        os.makedirs(os.path.dirname(FEEDBACK), exist_ok=True)
+        with open(FEEDBACK, "w") as f:
+            f.write(HEADER + entry)
+    else:
+        with open(FEEDBACK) as f:
+            existing = f.read()
+        # insert after HEADER if present, else at top
+        if existing.startswith("# Feedback log"):
+            # find first '---\n\n' which marks end of header block
+            split_at = existing.find("---\n\n")
+            if split_at >= 0:
+                head = existing[:split_at + len("---\n\n")]
+                tail = existing[split_at + len("---\n\n"):]
+                new = head + entry + tail
+            else:
+                new = HEADER + entry + existing
+        else:
+            new = HEADER + entry + existing
+        with open(FEEDBACK, "w") as f:
+            f.write(new)
+
+    print(f"logged: {ts} — {args.source}", file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main()
