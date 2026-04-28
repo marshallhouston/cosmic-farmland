@@ -146,3 +146,19 @@ Promote winners through `/systematize`:
 - Re-asking pattern: already in CLAUDE.md output discipline rule #4. Need PreToolUse hook gating "want me to" / "should I" in assistant text? Or compile prompt example reinforcement.
 - Drift on no-sprints rule: CLAUDE.md exists, model still violates. Hook on assistant output catching banned phrases?
 - Copy clarity in skills: audit skill text against confused phrasings. `/qa-triage` "apply all" / "call out overrides" specific.
+
+## LLM-classifier calibration set (2026-04-28)
+
+Stratified sample for cf:cc-friction skill validation gate. Picked by `cc-friction-pick-calibration`.
+
+| session_id | stratum | project | msgs | tokens_in | dur_min | last_ts |
+|---|---|---|---|---|---|---|
+| `c7385dda` | heavy | -Users-marshallhouston-code-preach-hub | 706 | 236,876,873 | 1451 | 2026-04-26 |
+| `1f0ddb12` | heavy | -Users-marshallhouston-code-preach-hub | 674 | 228,715,776 | 891 | 2026-04-25 |
+| `76d549ac` | heavy | -Users-marshallhouston-code-preach-hub | 717 | 225,617,049 | 936 | 2026-04-25 |
+| `501f31a9` | long | -Users-marshallhouston-code-preach-hub | 156 | 15,329,914 | 3773 | 2026-04-21 |
+| `bf3ca543` | long | -Users-marshallhouston-code-preach-hub | 164 | 11,245,499 | 2887 | 2026-04-16 |
+| `a31b24ae` | long | -Users-marshallhouston-code-preach-hub | 30 | 1,644,420 | 2399 | 2026-04-20 |
+| `463ebfba` | random | -Users-marshallhouston-code-preach-hub--claude-worktrees-feat-invite-improvements | 51 | 3,881,073 | 8 | 2026-04-16 |
+| `30c5e993` | random | -Users-marshallhouston-code-preach-hub | 339 | 69,959,729 | 1247 | 2026-04-26 |
+| `9fd5025d` | random | -Users-marshallhouston-code-preach-hub | 201 | 13,808,515 | 131 | 2026-04-14 |
