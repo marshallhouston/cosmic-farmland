@@ -162,3 +162,18 @@ Stratified sample for cf:cc-friction skill validation gate. Picked by `cc-fricti
 | `463ebfba` | random | -Users-marshallhouston-code-preach-hub--claude-worktrees-feat-invite-improvements | 51 | 3,881,073 | 8 | 2026-04-16 |
 | `30c5e993` | random | -Users-marshallhouston-code-preach-hub | 339 | 69,959,729 | 1247 | 2026-04-26 |
 | `9fd5025d` | random | -Users-marshallhouston-code-preach-hub | 201 | 13,808,515 | 131 | 2026-04-14 |
+
+## Next concrete step (2026-04-29)
+
+Hooks `no-drift.py` + `no-reasking.py` shipped (PRs #16, #17, plugin v1.7.1). Logging to `~/.claude/cc-friction-log.jsonl` with `type=drift` + `type=re_asking`. Flush-race confirmed live.
+
+After ~7d of real-session data accumulates:
+
+1. Group log entries by `labels` + `matches` across distinct `session_id`s.
+2. Any pattern firing 5+ times across distinct sessions = promotion candidate.
+3. Promote: convert that Stop-log to a PreToolUse block (refusal), or tighten CLAUDE.md rule wording.
+4. Don't extend `no-drift.py` patterns from speculation — only add what the log proves recurrent.
+
+Rejected during PR #16 review:
+- `time_estimate` regex over-matched on `"7 hours ago"` / `"24 hour TTL"`. Don't re-add without scope-marker requirement.
+- Refactoring `read_last_assistant_text` into shared module (2 callers; defer until 3rd).
