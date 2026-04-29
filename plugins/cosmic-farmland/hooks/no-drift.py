@@ -11,7 +11,53 @@ import json
 import re
 import sys
 import os
+import time
 from datetime import datetime, timezone
+
+
+def read_last_assistant_text(transcript_path: str, max_wait_s: float = 1.0) -> str:
+    """Return text of most recent assistant turn.
+
+    Stop hook fires before CC has finished flushing the just-completed assistant
+    message in some builds. If the last record in the transcript is type=user,
+    the assistant write is still pending — poll briefly, then read.
+    """
+    deadline = time.monotonic() + max_wait_s
+    while True:
+        try:
+            with open(transcript_path) as f:
+                lines = f.readlines()
+        except Exception:
+            return ""
+
+        last_type = None
+        for line in reversed(lines):
+            try:
+                d = json.loads(line)
+            except Exception:
+                continue
+            t = d.get("type")
+            if t in ("user", "assistant"):
+                last_type = t
+                break
+
+        if last_type == "assistant" or time.monotonic() >= deadline:
+            break
+        time.sleep(0.05)
+
+    for line in reversed(lines):
+        try:
+            d = json.loads(line)
+        except Exception:
+            continue
+        if d.get("type") != "assistant":
+            continue
+        for c in d.get("message", {}).get("content", []):
+            if isinstance(c, dict) and c.get("type") == "text":
+                txt = c.get("text", "")
+                if txt:
+                    return txt
+    return ""
 
 # (regex, label) pairs. Case-insensitive.
 PATTERNS = [
@@ -33,29 +79,7 @@ def main():
     if not transcript_path or not os.path.exists(transcript_path):
         return 0
 
-    last_text = ""
-    try:
-        with open(transcript_path) as f:
-            lines = f.readlines()
-        for line in reversed(lines):
-            try:
-                d = json.loads(line)
-            except Exception:
-                continue
-            if d.get("type") != "assistant":
-                continue
-            msg = d.get("message", {})
-            content = msg.get("content", [])
-            if isinstance(content, list):
-                for c in content:
-                    if isinstance(c, dict) and c.get("type") == "text":
-                        last_text = c.get("text", "")
-                        break
-            if last_text:
-                break
-    except Exception:
-        return 0
-
+    last_text = read_last_assistant_text(transcript_path)
     if not last_text:
         return 0
 
