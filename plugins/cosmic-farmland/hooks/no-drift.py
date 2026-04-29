@@ -23,13 +23,6 @@ PATTERNS = [
 ]
 
 
-def strip_code_blocks(text: str) -> str:
-    """Drop fenced code blocks + inline code so we don't flag legit code."""
-    text = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
-    text = re.sub(r"`[^`]*`", "", text)
-    return text
-
-
 def main():
     try:
         payload = json.load(sys.stdin)
@@ -66,8 +59,7 @@ def main():
     if not last_text:
         return 0
 
-    scan_text = strip_code_blocks(last_text)
-    scan_lower = scan_text.lower()
+    scan_lower = last_text.lower()
 
     matches = []
     for pat, label in PATTERNS:
