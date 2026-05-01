@@ -110,7 +110,24 @@ If these aren't true, stop and tell the user.
    - Delete local branch: `git branch -D <branch>` (ignore if already gone).
    - In the main checkout: `git pull --ff-only` on the default branch.
 
-7. **Report.** One or two sentences: PR number, merged URL, cleanup status. Nothing more.
+6a. **Verify production deploy (skip if repo has no `railway.json`).** A green PR check is not the same as a successful prod deploy. PR-preview and prod can pass different gates: preview-only test DB, env-conditional pre-deploy commands, missing prod secrets. Real incident 2026-05-01: PR #421 merged green, but prod deploys had been silently failing pre-deploy on every push since #419 (a guard in src/test/setup.ts rejected mainline DB; PR-preview used switchyard so the gap was invisible). Surfaced only when a user asked about an unrelated service. Do not let `/ship` return success while prod is stale.
+
+   If `railway.json` exists at repo root and the `railway` CLI is available:
+   ```bash
+   until s=$(railway deployment list --service <service> 2>/dev/null | awk 'NR==2{print $3}'); \
+         [ "$s" = "SUCCESS" ] || [ "$s" = "FAILED" ] || [ "$s" = "CRASHED" ] || [ "$s" = "REMOVED" ]; \
+         do sleep 20; done
+   ```
+   - Service name from `railway status --json` (service whose source repo matches the current GitHub repo). For preach-hub it is `preach-hub`. Hardcoding is fine when the skill is invoked in a known repo.
+   - Cap wait at 10 min (30 ticks of 20s). If still BUILDING/DEPLOYING after that, report the status and stop. Do not claim success.
+   - On non-SUCCESS terminal: pull the deploy logs (`railway logs <id> --service <s> --deployment --lines 200`), diagnose the failure inline (same discipline as step 3a, never punt with "investigate?"), and report. Common causes: pre-deploy command failing, migration failing, runtime crash on boot, missing env var.
+   - On SUCCESS: health-check the prod domain (`curl -s <prod-domain>/api/health`) and include the response in the report.
+   - If `railway` CLI is not on PATH, surface that fact (do not silently skip). Tell the user the deploy could not be verified locally and they should check the Railway dashboard.
+   - If the repo has no `railway.json` and no other known deploy target, skip silently.
+
+   Rationale: the gate that actually serves users is the deploy gate. If `/ship` does not verify it, a broken prod-only path looks identical to a clean ship until the next surface area happens to expose it. With this step, every `/ship` either confirms prod is live on the merged commit or surfaces the failure with logs at the moment it happens.
+
+7. **Report.** One or two sentences: PR number, merged URL, cleanup status, **prod deploy status (deploy id + SUCCESS/FAILED + commit live in prod)**. Nothing more.
 
 ## Non-goals
 
