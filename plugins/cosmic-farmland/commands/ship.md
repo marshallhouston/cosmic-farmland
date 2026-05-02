@@ -114,18 +114,20 @@ If these aren't true, stop and tell the user.
 
    If `railway.json` exists at repo root and the `railway` CLI is available:
 
-   **Pre-flight auth check.** Before polling, confirm the CLI can talk to the project:
+   **Pre-flight auth check.** Before polling, confirm the CLI can talk to the project. Define a shell function (not a variable) so word-splitting works the same in bash and zsh -- the Bash tool here uses zsh on macOS, where `$VAR command` does not split.
+
    ```bash
-   # Wrap in dotenvx run when the repo uses dotenvx for secrets, so a
-   # RAILWAY_TOKEN stored encrypted in .env is loaded automatically.
-   # Project tokens reject `railway whoami` (account-scoped). Use a
-   # project-scoped command like `status` to verify.
+   # dotenvx loads RAILWAY_TOKEN from encrypted .env automatically when
+   # the repo uses dotenvx. Project tokens reject `railway whoami`
+   # (account-scoped); use a project-scoped command like `status` to
+   # verify auth.
    if [ -f .env.keys ] && grep -q '^RAILWAY_TOKEN' .env 2>/dev/null; then
-     RAILWAY="dotenvx run --quiet -- railway"
+     rw() { dotenvx run --quiet -- railway "$@"; }
    else
-     RAILWAY="railway"
+     rw() { railway "$@"; }
    fi
-   $RAILWAY status >/dev/null 2>&1 || {
+
+   rw status >/dev/null 2>&1 || {
      echo "Railway CLI not authenticated for this project. Either:"
      echo "  - run: ! railway login        (interactive, expires)"
      echo "  - or:  dotenvx set RAILWAY_TOKEN <project-token>  (long-lived)"
@@ -136,13 +138,13 @@ If these aren't true, stop and tell the user.
 
    **Poll for terminal state:**
    ```bash
-   until s=$($RAILWAY deployment list --service <service> 2>/dev/null | awk 'NR==2{print $3}'); \
+   until s=$(rw deployment list --service <service> 2>/dev/null | awk 'NR==2{print $3}'); \
          [ "$s" = "SUCCESS" ] || [ "$s" = "FAILED" ] || [ "$s" = "CRASHED" ] || [ "$s" = "REMOVED" ]; \
          do sleep 20; done
    ```
-   - Service name from `$RAILWAY status --json` (service whose source repo matches the current GitHub repo). For preach-hub it is `preach-hub`. Hardcoding is fine when the skill is invoked in a known repo.
+   - Service name from `rw status --json` (service whose source repo matches the current GitHub repo). For preach-hub it is `preach-hub`. Hardcoding is fine when the skill is invoked in a known repo.
    - Cap wait at 10 min (30 ticks of 20s). If still BUILDING/DEPLOYING after that, report the status and stop. Do not claim success.
-   - On non-SUCCESS terminal: pull the deploy logs (`$RAILWAY logs <id> --service <s> --deployment --lines 200`), diagnose the failure inline (same discipline as step 3a, never punt with "investigate?"), and report. Common causes: pre-deploy command failing, migration failing, runtime crash on boot, missing env var.
+   - On non-SUCCESS terminal: pull the deploy logs (`rw logs <id> --service <s> --deployment --lines 200`), diagnose the failure inline (same discipline as step 3a, never punt with "investigate?"), and report. Common causes: pre-deploy command failing, migration failing, runtime crash on boot, missing env var.
    - On SUCCESS: health-check the prod domain (`curl -s <prod-domain>/api/health`) and include the response in the report.
    - If `railway` CLI is not on PATH, surface that fact (do not silently skip). Tell the user the deploy could not be verified locally and they should check the Railway dashboard.
    - If the repo has no `railway.json` and no other known deploy target, skip silently.
