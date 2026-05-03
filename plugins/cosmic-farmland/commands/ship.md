@@ -122,25 +122,33 @@ If these aren't true, stop and tell the user.
    # (account-scoped); use a project-scoped command like `status` to
    # verify auth.
    if [ -f .env.keys ] && grep -q '^RAILWAY_TOKEN' .env 2>/dev/null; then
-     rw() { dotenvx run --quiet -- railway "$@"; }
+     rw() { timeout 30 dotenvx run --quiet -- railway "$@"; }
    else
-     rw() { railway "$@"; }
+     rw() { timeout 30 railway "$@"; }
    fi
 
    rw status >/dev/null 2>&1 || {
-     echo "Railway CLI not authenticated for this project. Either:"
+     echo "Railway CLI not authenticated or hung (>30s). Either:"
      echo "  - run: ! railway login        (interactive, expires)"
      echo "  - or:  dotenvx set RAILWAY_TOKEN <project-token>  (long-lived)"
-     echo "Re-invoke /ship after auth is in place."
+     echo "Skipping prod-deploy verification. Check Railway dashboard manually."
      exit 2
    }
    ```
 
-   **Poll for terminal state:**
+   **Hard per-call timeout.** Every `rw` invocation is wrapped in `timeout 30`. Without it a single hung CLI call (network, auth refresh, project resolution) can eat the entire skill budget. 17-minute hang seen on PR #428. Never again.
+
+   **Poll for terminal state (cap 10 min total, 30 ticks of 20s):**
    ```bash
-   until s=$(rw deployment list --service <service> 2>/dev/null | awk 'NR==2{print $3}'); \
-         [ "$s" = "SUCCESS" ] || [ "$s" = "FAILED" ] || [ "$s" = "CRASHED" ] || [ "$s" = "REMOVED" ]; \
-         do sleep 20; done
+   START=$SECONDS
+   while [ $((SECONDS - START)) -lt 600 ]; do
+     s=$(rw deployment list --service <service> 2>/dev/null | awk 'NR==2{print $3}')
+     case "$s" in
+       SUCCESS|FAILED|CRASHED|REMOVED) break ;;
+       "") echo "rw deployment list timed out or returned empty. Skipping prod-verify."; break ;;
+     esac
+     sleep 20
+   done
    ```
    - Service name from `rw status --json` (service whose source repo matches the current GitHub repo). For preach-hub it is `preach-hub`. Hardcoding is fine when the skill is invoked in a known repo.
    - Cap wait at 10 min (30 ticks of 20s). If still BUILDING/DEPLOYING after that, report the status and stop. Do not claim success.
