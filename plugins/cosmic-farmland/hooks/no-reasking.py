@@ -14,7 +14,9 @@ Inputs (stdin JSON from CC):
 
 Outputs:
   - stderr: warning to marshall's terminal
-  - JSON additionalContext (stdout): reminder injected into model on next turn
+  - JSON {decision: block, reason: ...} on stdout: blocks Stop, forces model to
+    continue in-turn w/ corrective feedback (closes the loop; was log-only until
+    2026-05-03 when measurement showed 161 re_asking hits / 7d post-trim).
   - Append to ~/.claude/cc-friction-log.jsonl for later analysis
 """
 import json
@@ -137,10 +139,20 @@ def main():
 
     sys.stderr.write(
         f"[cc-friction] re-asking detected: {', '.join(repr(m[1]) for m in matches)}\n"
-        f"[cc-friction] CLAUDE.md output discipline #4: just do obvious next action.\n"
     )
     sys.stderr.flush()
 
+    # block stop, force model to continue w/ feedback in-turn (closes loop)
+    matched_phrases = ", ".join(repr(m[1]) for m in matches)
+    print(json.dumps({
+        "decision": "block",
+        "reason": (
+            f"Re-asking pattern detected: {matched_phrases}. "
+            "Per CLAUDE.md output discipline #4: do not ask 'want me to / should I / would you like' "
+            "when next action is obvious. Just do it. Confirm only on irreversible/destructive ops "
+            "(delete, drop table, force push, etc.). Take the obvious next action now instead of asking."
+        ),
+    }))
     return 0
 
 
