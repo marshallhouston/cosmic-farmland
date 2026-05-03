@@ -65,6 +65,13 @@ If these aren't true, stop and tell the user.
        echo "all green, OPEN with no auto-merge -- falling through to manual merge"
        break
      fi
+     # No-checks-at-all: repos that killed GHA (preach-hub #419, etc.) have an empty
+     # statusCheckRollup. Wait one extra tick to be sure no checks are coming, then
+     # fall through. Prevents 5-min stall on every ship in CI-less repos.
+     if [ "$STATE" = "OPEN" ] && [ -z "$PENDING" ] && [ -z "$FAILED" ] && [ "$PASSED" -eq 0 ] && [ $((SECONDS - START)) -gt 60 ]; then
+       echo "no checks present after 60s grace -- repo has no CI rollup, falling through to manual merge"
+       break
+     fi
      # Stall detector: 5 min with no state change → bail with snapshot.
      if [ $((SECONDS - STALL_START)) -gt 300 ]; then
        echo "STALL: no check state changed in 5 min. Bailing with snapshot above."
@@ -80,6 +87,7 @@ If these aren't true, stop and tell the user.
    - Stall: 5 minutes with no state change → bail with the last snapshot. Either a check is genuinely hung (CI infra issue, external dep timeout) or the PR is gated on something not in the rollup (review required, branch protection waiting on a context).
    - Why poll-not-watch: `--watch` gives no output until done. On a hung check the user sees nothing for 10+ minutes and assumes the assistant froze. Tick output proves liveness and surfaces *which* check is slow.
    - Why fall-through-on-green: incident 2026-04-26 PR #319 sat OPEN for 5 min after going green because `auto-merge-green` workflow only fires on `classify` completion and the label was applied manually after. The poll waited for MERGED that wasn't coming. Falling through to manual merge as soon as all-green removes the dead-wait. Defensive against label-applied-late, classifier-missed, repo-level auto-merge-disabled, and any other reason auto-merge fails to fire.
+   - Why fall-through-on-no-checks: incident 2026-05-03 PR #431 stalled the full 5min because preach-hub killed GHA (#419). statusCheckRollup is permanently empty; only Railway pre-deploy gates post-merge. The all-green branch requires `PASSED > 0`, so empty rollup never matched. 60s grace window confirms no checks are inbound (classifier comments are not check rollup entries), then falls through. Saves about 4 min on every ship in CI-less repos.
 
 3. **Verify required checks all passed.** Parse the final snapshot. Every check should have `conclusion: SUCCESS`. If anything is `FAILURE`, go to step 3a. Otherwise continue.
 
