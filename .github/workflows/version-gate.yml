@@ -3,6 +3,10 @@ on:
   pull_request:
     paths:
       - "plugins/**"
+  push:
+    branches: [main]
+    paths:
+      - "plugins/**"
 
 jobs:
   check-version:
@@ -14,4 +18,4 @@ jobs:
       - name: Verify plugin versions bumped on source change
         run: bash scripts/check-plugin-version.sh
         env:
-          BASE_REF: origin/${{ github.base_ref }}
+          BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
