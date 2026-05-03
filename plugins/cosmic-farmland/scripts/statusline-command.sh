@@ -67,10 +67,19 @@ if git -C "$cwd" rev-parse --git-dir > /dev/null 2>&1; then
   fi
 fi
 
-# Worktree indicator
+# Worktree indicator -- derive from live cwd, not harness-supplied launch label.
+# Harness `.worktree.name` is set at session start and goes stale when /ship
+# removes the worktree mid-session. Resolve from git directly so the label
+# always matches reality.
 worktree_part=""
-if [ -n "$worktree" ]; then
-  worktree_part=" \033[0;35m[wt: ${worktree}]\033[0m"
+if git -C "$cwd" rev-parse --git-dir > /dev/null 2>&1; then
+  git_dir=$(git -C "$cwd" rev-parse --git-dir 2>/dev/null)
+  common_dir=$(git -C "$cwd" rev-parse --git-common-dir 2>/dev/null)
+  # Linked worktree: git-dir lives under common-dir/worktrees/<name>; differs from common-dir.
+  if [ -n "$git_dir" ] && [ -n "$common_dir" ] && [ "$(cd "$git_dir" && pwd)" != "$(cd "$common_dir" && pwd)" ]; then
+    wt_name=$(basename "$cwd")
+    worktree_part=" \033[0;35m[wt: ${wt_name}]\033[0m"
+  fi
 fi
 
 # Line 1: dir, git, worktree
