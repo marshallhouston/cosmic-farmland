@@ -125,26 +125,37 @@ If these aren't true, stop and tell the user.
    **Pre-flight auth check.** Before polling, confirm the CLI can talk to the project. Define a shell function (not a variable) so word-splitting works the same in bash and zsh -- the Bash tool here uses zsh on macOS, where `$VAR command` does not split.
 
    ```bash
+   # Portable timeout: macOS zsh has no `timeout`. Prefer `gtimeout`
+   # (coreutils via brew), fall back to GNU `timeout`, fall back to no-op.
+   # No-op is acceptable for the pre-flight only because we judge auth
+   # from stdout, not exit code; the per-call timeout for deploy polling
+   # is enforced by the outer 10-minute SECONDS cap.
+   if command -v gtimeout >/dev/null 2>&1; then TO="gtimeout 30";
+   elif command -v timeout  >/dev/null 2>&1; then TO="timeout 30";
+   else TO=""; fi
+
    # dotenvx loads RAILWAY_TOKEN from encrypted .env automatically when
    # the repo uses dotenvx. Project tokens reject `railway whoami`
    # (account-scoped); use a project-scoped command like `status` to
-   # verify auth.
+   # verify auth -- and judge auth from stdout (`railway status` exits
+   # non-zero on some project-token configs even when it prints valid
+   # `Project: ... Environment: ... Service: ...` info).
    if [ -f .env.keys ] && grep -q '^RAILWAY_TOKEN' .env 2>/dev/null; then
-     rw() { timeout 30 dotenvx run --quiet -- railway "$@"; }
+     rw() { $TO dotenvx run --quiet -- railway "$@"; }
    else
-     rw() { timeout 30 railway "$@"; }
+     rw() { $TO railway "$@"; }
    fi
 
-   rw status >/dev/null 2>&1 || {
-     echo "Railway CLI not authenticated or hung (>30s). Either:"
+   if ! rw status 2>&1 | grep -q '^Project:'; then
+     echo "Railway CLI not authenticated. Either:"
      echo "  - run: ! railway login        (interactive, expires)"
      echo "  - or:  dotenvx set RAILWAY_TOKEN <project-token>  (long-lived)"
      echo "Skipping prod-deploy verification. Check Railway dashboard manually."
      exit 2
-   }
+   fi
    ```
 
-   **Hard per-call timeout.** Every `rw` invocation is wrapped in `timeout 30`. Without it a single hung CLI call (network, auth refresh, project resolution) can eat the entire skill budget. 17-minute hang seen on PR #428. Never again.
+   **Hard per-call timeout.** Every `rw` invocation is wrapped in `$TO` which expands to `gtimeout 30` / `timeout 30` / empty. Without it, a single hung CLI call (network, auth refresh, project resolution) can eat the entire skill budget -- 17-minute hang seen on PR #428. macOS users should `brew install coreutils` for `gtimeout`; without it the deploy-poll loop's outer 10-minute `SECONDS` cap is the only ceiling. Auth detection uses stdout grep (`^Project:`) rather than exit code because `railway status` returns non-zero on some project-token configs even when the project is correctly resolved (incident 2026-05-04: every preach-hub /ship false-negatived on auth and silently skipped prod-verify).
 
    **Poll for terminal state (cap 10 min total, 30 ticks of 20s):**
    ```bash
