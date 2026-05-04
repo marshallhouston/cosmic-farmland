@@ -42,16 +42,6 @@
             "timeout": 5
           }
         ]
-      },
-      {
-        "matcher": "Write|Edit|NotebookEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/check-killed-tombstone.py",
-            "timeout": 5
-          }
-        ]
       }
     ]
   }
