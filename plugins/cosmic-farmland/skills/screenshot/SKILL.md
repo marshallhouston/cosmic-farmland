@@ -26,9 +26,15 @@ Folder missing or no `*.png` inside: tell user, suggest `export SCREENSHOT_DIR=.
 ls -t "$DIR"/*.png 2>/dev/null | head -N
 ```
 
+macOS screenshot filenames contain a narrow no-break space (U+202F) before AM/PM. Direct quoting (`rm "..."`) breaks. For any subsequent file op (delete, move, convert), pipe through xargs -0:
+
+```bash
+ls -t "$DIR"/*.png | head -1 | tr '\n' '\0' | xargs -0 <cmd>
+```
+
 ## Read + act
 
-`Read` each abs path (multimodal, no copy). Then read images + intent together.
+`Read` each abs path (multimodal, no copy). `Read` handles the special chars fine. Then read images + intent together.
 
 | Intent | Action |
 |---|---|
