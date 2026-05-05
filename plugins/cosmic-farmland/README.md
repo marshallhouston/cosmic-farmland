@@ -30,6 +30,7 @@ In Claude Code:
 - `golf-tee-times` — check tee time availability
 - `handoff` — generate self-contained session handoff
 - `interactive-review-doc` — create interactive HTML review docs
+- `screenshot` — reads your newest screenshot(s) (up to 10) and executes the intent you give after the count. `/screenshot` explains newest. `/screenshot fix` debugs an error in the image and edits code. `/screenshot 3 make infographic` reads last 3 and produces an infographic. `/screenshot do this` remixes the pattern in the image toward your goals. Folder auto-resolves via `defaults read com.apple.screencapture location` (macOS); override with `SCREENSHOT_DIR=/path`. Capture-then-invoke only; does not take screenshots for you.
 
 **Commands**
 
