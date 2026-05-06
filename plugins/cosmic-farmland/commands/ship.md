@@ -125,14 +125,29 @@ If these aren't true, stop and tell the user.
    **Pre-flight auth check.** Before polling, confirm the CLI can talk to the project. Define a shell function (not a variable) so word-splitting works the same in bash and zsh -- the Bash tool here uses zsh on macOS, where `$VAR command` does not split.
 
    ```bash
-   # Portable timeout: macOS zsh has no `timeout`. Prefer `gtimeout`
-   # (coreutils via brew), fall back to GNU `timeout`, fall back to no-op.
-   # No-op is acceptable for the pre-flight only because we judge auth
-   # from stdout, not exit code; the per-call timeout for deploy polling
-   # is enforced by the outer 10-minute SECONDS cap.
-   if command -v gtimeout >/dev/null 2>&1; then TO="gtimeout 30";
-   elif command -v timeout  >/dev/null 2>&1; then TO="timeout 30";
-   else TO=""; fi
+   # Portable timeout. Define `_to` as a function so the timeout
+   # invocation isn't subject to shell word-splitting (a string
+   # variable with embedded quotes -- e.g. `TO="perl -e '...'"` --
+   # breaks because `$TO cmd` splits on whitespace but does not
+   # re-process quotes). Function form survives both bash and zsh.
+   #
+   # Order: gtimeout (coreutils via brew) > GNU timeout > perl
+   # (always on macOS) > fail loud. Never silently proceed without
+   # a per-call cap -- a single hung `rw` call eats the entire
+   # skill budget (17-min hang on PR #428; another on PR #449 where
+   # coreutils was missing and there was no perl fallback wired up).
+   if command -v gtimeout >/dev/null 2>&1; then
+     _to() { gtimeout 30 "$@"; }
+   elif command -v timeout >/dev/null 2>&1; then
+     _to() { timeout 30 "$@"; }
+   elif command -v perl >/dev/null 2>&1; then
+     _to() { perl -e 'alarm 30; exec @ARGV' "$@"; }
+   else
+     echo "No timeout utility available (gtimeout, timeout, perl all missing)."
+     echo "Install coreutils: brew install coreutils"
+     echo "Skipping prod-deploy verification. Check Railway dashboard manually."
+     exit 2
+   fi
 
    # dotenvx loads RAILWAY_TOKEN from encrypted .env automatically when
    # the repo uses dotenvx. Project tokens reject `railway whoami`
@@ -141,9 +156,9 @@ If these aren't true, stop and tell the user.
    # non-zero on some project-token configs even when it prints valid
    # `Project: ... Environment: ... Service: ...` info).
    if [ -f .env.keys ] && grep -q '^RAILWAY_TOKEN' .env 2>/dev/null; then
-     rw() { $TO dotenvx run --quiet -- railway "$@"; }
+     rw() { _to dotenvx run --quiet -- railway "$@"; }
    else
-     rw() { $TO railway "$@"; }
+     rw() { _to railway "$@"; }
    fi
 
    if ! rw status 2>&1 | grep -q '^Project:'; then
@@ -155,7 +170,7 @@ If these aren't true, stop and tell the user.
    fi
    ```
 
-   **Hard per-call timeout.** Every `rw` invocation is wrapped in `$TO` which expands to `gtimeout 30` / `timeout 30` / empty. Without it, a single hung CLI call (network, auth refresh, project resolution) can eat the entire skill budget -- 17-minute hang seen on PR #428. macOS users should `brew install coreutils` for `gtimeout`; without it the deploy-poll loop's outer 10-minute `SECONDS` cap is the only ceiling. Auth detection uses stdout grep (`^Project:`) rather than exit code because `railway status` returns non-zero on some project-token configs even when the project is correctly resolved (incident 2026-05-04: every preach-hub /ship false-negatived on auth and silently skipped prod-verify).
+   **Hard per-call timeout.** Every `rw` invocation is wrapped via `_to`, a shell function that picks the first available of `gtimeout 30`, `timeout 30`, or `perl -e 'alarm 30; exec @ARGV'`. If none of the three are present the skill exits 2 before polling rather than entering an unbounded loop. Function form (vs. a `TO=` string variable) is required because `$TO cmd` would split on whitespace but not re-process embedded quotes, so a perl fallback string would corrupt under expansion. Auth detection uses stdout grep (`^Project:`) rather than exit code because `railway status` returns non-zero on some project-token configs even when the project is correctly resolved (incident 2026-05-04: every preach-hub /ship false-negatived on auth and silently skipped prod-verify). Incidents driving each layer: 17-min hang PR #428 (no per-call cap at all); PR #449 (coreutils missing, no perl fallback, hang on `rw deployment list`).
 
    **Poll for terminal state (cap 10 min total, 30 ticks of 20s):**
    ```bash
