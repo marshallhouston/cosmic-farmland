@@ -35,50 +35,42 @@ If these aren't true, stop and tell the user.
    - Repo has no classifier at all: skip silently.
    - Rationale: the classifier is the system's best signal about blast radius. /ship ignoring it defeats the two-stage pipeline. But a missing label is almost always a timing/workflow gap, not a policy signal, so auto-score rather than punt the user a next-step they already know.
 
-2. **Poll PR state until it merges or stalls.** Do NOT use `gh pr checks --watch`. That command blocks until **every** check has a terminal state, even when one slow gate (Railway preview, opt-in runtime checks, classifier waiting on LLM) hangs for 10–15 minutes after the merge would otherwise have fired. Poll the PR state directly and snapshot each tick so the user sees liveness:
+2. **Poll PR state -- background bash + Monitor, NOT foreground.** Do NOT use `gh pr checks --watch` (blocks until every check is terminal; one slow Railway preview hangs the whole thing). Do NOT run the poll in foreground Bash either: foreground buffers stdout until exit, so a 4-min poll looks frozen and the user interrupts asking "is it hung?". Pattern: `run_in_background: true` for the poll loop (heartbeat every tick to a file) + `Monitor` on the same file with a `grep --line-buffered` alternation that fires only on terminal events. User sees nothing during quiet pending; gets a notification the instant state flips. Surface the bg-output-file path in your text reply so the user can `! tail -f` it themselves if they want live ticks. Incident 2026-05-07: foreground poll on PR #479 had user interrupt twice in 4 min; switching to background+Monitor fixed it.
 
    ```bash
+   # Background poll. Schema handles BOTH GitHub Actions CheckRun
+   # (.conclusion) and Railway/external StatusContext (.state). Earlier ship
+   # had jq filter checking only .conclusion; missed Railway pending entirely
+   # and false-fell-through to merge attempt while preview was still
+   # building (PR #479 incident).
    PR=<pr>
    START=$SECONDS
-   STALL_START=$SECONDS
-   LAST=""
    while [ $((SECONDS - START)) -lt 1200 ]; do
-     SNAP=$(gh pr view "$PR" --json state,statusCheckRollup --jq '{
-       state,
-       failed:  [.statusCheckRollup[] | select(.conclusion == "FAILURE") | .name],
-       pending: [.statusCheckRollup[] | select(.status == "IN_PROGRESS" or .status == "QUEUED") | .name],
-       passed:  [.statusCheckRollup[] | select(.conclusion == "SUCCESS")] | length
+     SNAP=$(gh pr view "$PR" --json state,mergeStateStatus,statusCheckRollup --jq '{
+       state, mss: .mergeStateStatus,
+       checks: [.statusCheckRollup[]? | {n:(.name // .context), s:(.conclusion // .state)}]
      }')
+     T=$((SECONDS - START))
+     echo "$(date -u +%T) +${T}s $(jq -c . <<<"$SNAP")"
      STATE=$(jq -r .state <<<"$SNAP")
-     FAILED=$(jq -r '.failed | join(",")' <<<"$SNAP")
-     PENDING=$(jq -r '.pending | join(",")' <<<"$SNAP")
-     PASSED=$(jq -r '.passed' <<<"$SNAP")
-     SUMMARY="state=$STATE passed=$PASSED pending=[$PENDING] failed=[$FAILED]"
-     [ "$SUMMARY" != "$LAST" ] && { echo "$(date -u +%T) $SUMMARY"; LAST="$SUMMARY"; STALL_START=$SECONDS; }
-     case "$STATE" in
-       MERGED) echo "merged"; break ;;
-       CLOSED) echo "closed without merge"; exit 1 ;;
-     esac
-     [ -n "$FAILED" ] && { echo "failed: $FAILED"; break; }
-     # All-green-but-OPEN: auto-merge isn't going to fire. Break and let step 5 merge manually.
-     if [ "$STATE" = "OPEN" ] && [ -z "$PENDING" ] && [ -z "$FAILED" ] && [ "$PASSED" -gt 0 ]; then
-       echo "all green, OPEN with no auto-merge -- falling through to manual merge"
-       break
+     case "$STATE" in MERGED) echo merged; break;; CLOSED) echo closed; exit 1;; esac
+     FAILS=$(jq -r '[.checks[] | select(.s=="FAILURE" or .s=="ERROR")] | length' <<<"$SNAP")
+     PEND=$(jq -r  '[.checks[] | select(.s=="PENDING" or .s=="IN_PROGRESS" or .s=="QUEUED")] | length' <<<"$SNAP")
+     [ "$FAILS" -gt 0 ] && { echo "FAILURE"; break; }
+     if [ "$STATE" = "OPEN" ] && [ "$PEND" = "0" ]; then
+       PASSED=$(jq -r '[.checks[] | select(.s=="SUCCESS")] | length' <<<"$SNAP")
+       if [ "$PASSED" -gt 0 ]; then echo "READY"; break
+       elif [ $T -gt 60 ]; then    echo "READY_NO_CHECKS"; break
+       fi
      fi
-     # No-checks-at-all: repos that killed GHA (preach-hub #419, etc.) have an empty
-     # statusCheckRollup. Wait one extra tick to be sure no checks are coming, then
-     # fall through. Prevents 5-min stall on every ship in CI-less repos.
-     if [ "$STATE" = "OPEN" ] && [ -z "$PENDING" ] && [ -z "$FAILED" ] && [ "$PASSED" -eq 0 ] && [ $((SECONDS - START)) -gt 60 ]; then
-       echo "no checks present after 60s grace -- repo has no CI rollup, falling through to manual merge"
-       break
-     fi
-     # Stall detector: 5 min with no state change → bail with snapshot.
-     if [ $((SECONDS - STALL_START)) -gt 300 ]; then
-       echo "STALL: no check state changed in 5 min. Bailing with snapshot above."
-       break
-     fi
-     sleep 30
+     sleep 20
    done
+   ```
+
+   Then arm Monitor on the bg-output file path returned by the Bash tool result:
+
+   ```bash
+   tail -n 0 -F <bg-output-file> | grep -E --line-buffered "READY|READY_NO_CHECKS|FAILURE|merged|closed"
    ```
    - `state: MERGED` means an auto-merge job (or admin merge) fired. Done. Skip step 4 (merge already happened) and go to step 6.
    - `state: OPEN` with all checks green and no pending: auto-merge didn't fire (label applied late, classifier missed the PR, repo auto-merge disabled, etc.). Break out of the poll and continue to step 4 (verify mergeable) → step 5 (manual merge). Do NOT wait the full 5-min stall — we already know the answer.
@@ -113,10 +105,14 @@ If these aren't true, stop and tell the user.
    - `--delete-branch` may fail locally from a worktree with a cosmetic `'<base>' is already used by worktree` error — this is expected and the merge still succeeded on GitHub.
    - After merge, verify with `gh pr view <pr> --json state,mergedAt`. If `state: MERGED`, treat as success regardless of local stderr.
 
-6. **Clean up.**
-   - If running from a worktree: use `ExitWorktree` (or `cd` out, then `git worktree remove <path>`). If worktree has uncommitted changes beyond the merged work, stop and ask.
-   - Delete local branch: `git branch -D <branch>` (ignore if already gone).
-   - In the main checkout: `git pull --ff-only` on the default branch.
+6. **Clean up.** Two paths depending on how you entered the worktree:
+   - **Session entered via `EnterWorktree(name:...)` (this-session create):** call `ExitWorktree(action: "remove")`. Tool deletes worktree dir + branch.
+   - **Session entered via `EnterWorktree(path:...)` (pre-existing worktree):** ExitWorktree only operates on this-session creates, so `action: "remove"` is a no-op. Two-step dance is mandatory:
+     1. `ExitWorktree(action: "keep")` -- returns session cwd to main repo.
+     2. From main repo: `git worktree remove <path> 2>&1; git branch -D <branch> 2>&1`. Both will normally succeed (the merge already deleted the remote branch; local branch + worktree dir are now safe to drop).
+   - **Not in a worktree:** just `git branch -D <branch>` from main repo.
+   - Then: `git checkout main 2>&1 | tail -2; git pull --ff-only 2>&1 | tail -3`.
+   - Note: `gh pr merge --delete-branch` is auto-stripped by the local pretool hook when CWD is inside a worktree (collision with worktree HEAD), so the local-branch cleanup above is mandatory, not optional. Remote branch is deleted by the merge regardless.
 
 6a. **Verify production deploy (skip if repo has no `railway.json`).** A green PR check is not the same as a successful prod deploy. PR-preview and prod can pass different gates: preview-only test DB, env-conditional pre-deploy commands, missing prod secrets. Real incident 2026-05-01: PR #421 merged green, but prod deploys had been silently failing pre-deploy on every push since #419 (a guard in src/test/setup.ts rejected mainline DB; PR-preview used switchyard so the gap was invisible). Surfaced only when a user asked about an unrelated service. Do not let `/ship` return success while prod is stale.
 
