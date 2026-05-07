@@ -89,15 +89,11 @@ For each commit (or logical chunk):
    - `KEEP`: earns its place.
    - `SUSPECT`: PTV is thin; acknowledge cost but small enough to leave.
    - `KILL`: cologne. Revert candidate.
-4. **Confidence**: `low` / `med` / `high`. How sure the audit is in this read, independent of verdict severity.
-   - `high`: diff self-contained; load-bearing status obvious from change alone.
-   - `med`: read depends on assumptions about callers / data / runtime not fully verified.
-   - `low`: could plausibly flip the other way without more context.
+4. **Confidence**: `low` / `med` / `high` on `KILL` and `SUSPECT` only. `high` = diff self-contained; `low` = read depends on unverified assumptions about callers / data / runtime. Omit on `KEEP`.
 
    Filtering rule (apply silently, before output):
    - `KILL` + `low`: downgrade to `SUSPECT` and name the unknown. Never KILL on a guess.
    - `SUSPECT` + `low`: drop unless fix is cheap (under 5 tool calls) or trivially correct.
-   - `KEEP` confidence is informational only.
 5. **Reason**: one short paragraph. Name the *specific* thing that justifies or fails to justify it. No hedging.
 
 ## Output format
@@ -111,7 +107,7 @@ Lens: [lens(es)] — [one-line reason for inference]
 
 ## Per-commit verdicts
 
-**A: <short title> (<N> lines): KEEP / SUSPECT / KILL, confidence: low/med/high**
+**A: <short title> (<N> lines): KEEP / SUSPECT / KILL[, confidence: low/med/high]**
 <one-paragraph PTVM reasoning>
 
 **B — ...**
