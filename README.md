@@ -44,4 +44,4 @@ When you change anything under `plugins/<name>/` you must also bump `plugins/<na
 - **minor** (`x.Y.0`) -- new commands / skills / hooks, new behavior
 - **major** (`X.0.0`) -- removed or renamed commands, breaking config
 
-The pre-commit hook (above) enforces this. If you see `ERROR: plugins/... changed without bumping ...`, edit the listed `plugin.json`, stage it, and re-commit.
+The pre-commit and pre-push hooks (above) enforce this; CI is the final backstop. If you see `ERROR: plugins/... changed without bumping ...` (commit) or `FAIL: plugins/... source changed but version still ...` (push/CI), edit the listed `plugin.json`, bump `"version"`, and re-stage.
