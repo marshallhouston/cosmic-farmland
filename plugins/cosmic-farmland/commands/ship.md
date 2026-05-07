@@ -172,20 +172,27 @@ If these aren't true, stop and tell the user.
 
    **Hard per-call timeout.** Every `rw` invocation is wrapped via `_to`, a shell function that picks the first available of `gtimeout 30`, `timeout 30`, or `perl -e 'alarm 30; exec @ARGV'`. If none of the three are present the skill exits 2 before polling rather than entering an unbounded loop. Function form (vs. a `TO=` string variable) is required because `$TO cmd` would split on whitespace but not re-process embedded quotes, so a perl fallback string would corrupt under expansion. Auth detection uses stdout grep (`^Project:`) rather than exit code because `railway status` returns non-zero on some project-token configs even when the project is correctly resolved (incident 2026-05-04: every preach-hub /ship false-negatived on auth and silently skipped prod-verify). Incidents driving each layer: 17-min hang PR #428 (no per-call cap at all); PR #449 (coreutils missing, no perl fallback, hang on `rw deployment list`).
 
-   **Poll for terminal state (cap 10 min total, 30 ticks of 20s):**
+   **Diff-gate skip.** Prod-verify exists to catch failures in build, pre-deploy, or boot. If the merged diff touches none of those surfaces, the prod deploy is a no-op clone of the previous one and verifying it just blocks the session. Before polling, check the merged diff:
+   ```bash
+   gh pr diff <pr> --name-only | grep -E '^(src/server/|src/db/|drizzle/|migrations/|scripts/(deploy|migrate|pre-deploy)|railway\.json|nixpacks\.toml|Dockerfile|package\.json|bun\.lock|\.env(\.|$))' && NEEDS_VERIFY=1 || NEEDS_VERIFY=0
+   ```
+   If `NEEDS_VERIFY=0` (pure docs/UI/copy/test changes), skip the poll entirely and note "prod-verify skipped (diff touches no deploy-affecting paths)" in the final report. The next deploy-affecting ship will catch any drift.
+
+   **Poll for terminal state (run in background; cap 10 min total, 30 ticks of 10s).** Launch this as a single `run_in_background: true` Bash invocation so the foreground session continues immediately. The notification surfaces when the loop exits; report deploy status as a follow-up message rather than holding step 7 hostage to it.
    ```bash
    START=$SECONDS
    while [ $((SECONDS - START)) -lt 600 ]; do
      s=$(rw deployment list --service <service> 2>/dev/null | awk 'NR==2{print $3}')
      case "$s" in
-       SUCCESS|FAILED|CRASHED|REMOVED) break ;;
+       SUCCESS|FAILED|CRASHED|REMOVED) echo "deploy=$s after $((SECONDS - START))s"; break ;;
        "") echo "rw deployment list timed out or returned empty. Skipping prod-verify."; break ;;
      esac
-     sleep 20
+     sleep 10
    done
    ```
    - Service name from `rw status --json` (service whose source repo matches the current GitHub repo). For preach-hub it is `preach-hub`. Hardcoding is fine when the skill is invoked in a known repo.
-   - Cap wait at 10 min (30 ticks of 20s). If still BUILDING/DEPLOYING after that, report the status and stop. Do not claim success.
+   - Cap wait at 10 min (60 ticks of 10s). If still BUILDING/DEPLOYING after that, report the status and stop. Do not claim success.
+   - 10s tick (was 20s): cuts the worst-case overshoot from 20s to 10s when status flips mid-tick. Healthy deploy is still ~3-5min total, so the tick rate is dwarfed by build time -- but keeps the poll responsive when SUCCESS lands.
    - On non-SUCCESS terminal: pull the deploy logs (`rw logs <id> --service <s> --deployment --lines 200`), diagnose the failure inline (same discipline as step 3a, never punt with "investigate?"), and report. Common causes: pre-deploy command failing, migration failing, runtime crash on boot, missing env var.
    - On SUCCESS: health-check the prod domain (`curl -s <prod-domain>/api/health`) and include the response in the report.
    - If `railway` CLI is not on PATH, surface that fact (do not silently skip). Tell the user the deploy could not be verified locally and they should check the Railway dashboard.
@@ -193,7 +200,7 @@ If these aren't true, stop and tell the user.
 
    Rationale: the gate that actually serves users is the deploy gate. If `/ship` does not verify it, a broken prod-only path looks identical to a clean ship until the next surface area happens to expose it. With this step, every `/ship` either confirms prod is live on the merged commit or surfaces the failure with logs at the moment it happens.
 
-7. **Report.** One or two sentences: PR number, merged URL, cleanup status, **prod deploy status (deploy id + SUCCESS/FAILED + commit live in prod)**. Nothing more.
+7. **Report.** One or two sentences: PR number, merged URL, cleanup status. If prod-verify ran in background, note that deploy status will follow as a separate message when the poll exits. If prod-verify was skipped via the diff-gate, note that. Otherwise (synchronous verify, e.g. user explicitly asked to wait): include deploy id + SUCCESS/FAILED + commit live in prod. Nothing more.
 
 ## Non-goals
 
