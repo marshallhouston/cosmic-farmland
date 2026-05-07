@@ -28,10 +28,10 @@ Install whichever you want. See each plugin's README for usage:
 
 ### One-time setup
 
-Enable the repo's pre-commit hook so commits that change a plugin without bumping its `plugin.json` version are blocked:
+Wire the repo's hooks (pre-commit blocks per-commit drift, pre-push runs the CI version-gate against `origin/main` so you catch cumulative branch drift before pushing):
 
 ```
-git config core.hooksPath .githooks
+bash scripts/setup-hooks.sh
 ```
 
 Plugin caches key off the `version` field. Edits that ship without a bump silently keep consumers on the old code.

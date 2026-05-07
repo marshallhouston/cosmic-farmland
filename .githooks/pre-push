@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Pre-push: run the same version-gate logic as CI against origin/main.
+# Catches cumulative branch drift before it hits the PR (CI uses
+# origin/main...HEAD; per-commit pre-commit can't see that).
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+SCRIPT="$REPO_ROOT/scripts/check-plugin-version.sh"
+[ -x "$SCRIPT" ] || exit 0
+
+BASE_REF="origin/main" bash "$SCRIPT"
