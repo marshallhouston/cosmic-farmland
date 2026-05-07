@@ -23,3 +23,13 @@ Install whichever you want. See each plugin's README for usage:
 
 - [plugins/cosmic-farmland/README.md](plugins/cosmic-farmland/README.md)
 - [plugins/obsidian-weaver/README.md](plugins/obsidian-weaver/README.md)
+
+## Development
+
+After cloning, enable the repo's pre-commit hook so commits that change a plugin without bumping its `plugin.json` version are blocked:
+
+```
+git config core.hooksPath .githooks
+```
+
+Plugin caches key off the version field. Edits that ship without a bump silently keep consumers on the old code.

@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Block commits that modify a plugin without bumping its version.
+#
+# Why: Claude Code plugin caches key off plugins/<name>/plugin.json version.
+# Edits that don't bump version ship into the cache as the same artifact,
+# so consumers keep running the old code. Recurring miss as of 2026-05-07.
+set -euo pipefail
+
+CHANGED=$(git diff --cached --name-only --diff-filter=ACMR)
+[ -z "$CHANGED" ] && exit 0
+
+# Map each changed plugin file to its plugin dir.
+TOUCHED_PLUGINS=$(printf '%s\n' "$CHANGED" \
+  | awk -F/ '/^plugins\// && NF >= 2 {print $1"/"$2}' \
+  | sort -u)
+[ -z "$TOUCHED_PLUGINS" ] && exit 0
+
+FAIL=0
+while IFS= read -r plugin_dir; do
+  manifest="$plugin_dir/plugin.json"
+  [ -f "$manifest" ] || continue
+
+  # Did anything OTHER than plugin.json change in this plugin?
+  non_manifest=$(printf '%s\n' "$CHANGED" \
+    | grep "^$plugin_dir/" \
+    | grep -v "^$manifest$" || true)
+  [ -z "$non_manifest" ] && continue
+
+  # Is plugin.json itself staged with a version diff?
+  if printf '%s\n' "$CHANGED" | grep -qx "$manifest"; then
+    if git diff --cached -- "$manifest" | grep -qE '^\+\s*"version"'; then
+      continue
+    fi
+  fi
+
+  echo "ERROR: $plugin_dir changed without bumping $manifest version" >&2
+  echo "  changed files:" >&2
+  printf '    %s\n' $non_manifest >&2
+  FAIL=1
+done <<< "$TOUCHED_PLUGINS"
+
+if [ "$FAIL" -ne 0 ]; then
+  echo "" >&2
+  echo "Bump the affected plugin.json version field, stage it, and retry." >&2
+  exit 1
+fi
