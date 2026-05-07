@@ -85,11 +85,16 @@ For each commit (or logical chunk):
    - Defense against attacker that cannot reach this code? Suspect.
    - Abstraction with one caller? Suspect.
    - "Nice polish" with no user-visible effect? Suspect at `huff`+, kill at `gag`.
-3. **Verdict** — one of:
-   - `KEEP` — earns its place.
-   - `SUSPECT` — PTV is thin; acknowledge cost but small enough to leave.
-   - `KILL` — cologne. Revert candidate.
-4. **Reason** — one short paragraph. Name the *specific* thing that justifies or fails to justify it. No hedging.
+3. **Verdict**: one of:
+   - `KEEP`: earns its place.
+   - `SUSPECT`: PTV is thin; acknowledge cost but small enough to leave.
+   - `KILL`: cologne. Revert candidate.
+4. **Confidence**: `low` / `med` / `high` on `KILL` and `SUSPECT` only. `high` = diff self-contained; `low` = read depends on unverified assumptions about callers / data / runtime. Omit on `KEEP`.
+
+   Filtering rule (apply silently, before output):
+   - `KILL` + `low`: downgrade to `SUSPECT` and name the unknown. Never KILL on a guess.
+   - `SUSPECT` + `low`: drop unless fix is cheap (under 5 tool calls) or trivially correct.
+5. **Reason**: one short paragraph. Name the *specific* thing that justifies or fails to justify it. No hedging.
 
 ## Output format
 
@@ -102,7 +107,7 @@ Lens: [lens(es)] — [one-line reason for inference]
 
 ## Per-commit verdicts
 
-**A — <short title> (<N> lines): KEEP / SUSPECT / KILL**
+**A: <short title> (<N> lines): KEEP / SUSPECT / KILL[, confidence: low/med/high]**
 <one-paragraph PTVM reasoning>
 
 **B — ...**
