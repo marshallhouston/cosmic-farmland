@@ -26,10 +26,22 @@ Install whichever you want. See each plugin's README for usage:
 
 ## Development
 
-After cloning, enable the repo's pre-commit hook so commits that change a plugin without bumping its `plugin.json` version are blocked:
+### One-time setup
+
+Enable the repo's pre-commit hook so commits that change a plugin without bumping its `plugin.json` version are blocked:
 
 ```
 git config core.hooksPath .githooks
 ```
 
-Plugin caches key off the version field. Edits that ship without a bump silently keep consumers on the old code.
+Plugin caches key off the `version` field. Edits that ship without a bump silently keep consumers on the old code.
+
+### Editing a plugin
+
+When you change anything under `plugins/<name>/` you must also bump `plugins/<name>/plugin.json` `"version"` in the same commit. Semver:
+
+- **patch** (`x.y.Z`) -- bug fixes, prose tweaks, internal refactors
+- **minor** (`x.Y.0`) -- new commands / skills / hooks, new behavior
+- **major** (`X.0.0`) -- removed or renamed commands, breaking config
+
+The pre-commit hook (above) enforces this. If you see `ERROR: plugins/... changed without bumping ...`, edit the listed `plugin.json`, stage it, and re-commit.

@@ -33,14 +33,19 @@ while IFS= read -r plugin_dir; do
     fi
   fi
 
-  echo "ERROR: $plugin_dir changed without bumping $manifest version" >&2
+  current=$(grep -E '"version"[[:space:]]*:' "$manifest" | head -1 | sed -E 's/.*"version"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
+  echo "ERROR: $plugin_dir changed without bumping $manifest" >&2
+  echo "  current version: $current" >&2
   echo "  changed files:" >&2
   printf '    %s\n' $non_manifest >&2
+  echo "" >&2
+  echo "  Fix: edit $manifest -> bump \"version\" (semver):" >&2
+  echo "    patch (x.y.Z) for fixes, prose tweaks, internal refactors" >&2
+  echo "    minor (x.Y.0) for new commands/skills/hooks or new behavior" >&2
+  echo "    major (X.0.0) for removed/renamed commands or breaking config" >&2
+  echo "  Then: git add $manifest && git commit ..." >&2
+  echo "" >&2
   FAIL=1
 done <<< "$TOUCHED_PLUGINS"
 
-if [ "$FAIL" -ne 0 ]; then
-  echo "" >&2
-  echo "Bump the affected plugin.json version field, stage it, and retry." >&2
-  exit 1
-fi
+[ "$FAIL" -ne 0 ] && exit 1
