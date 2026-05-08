@@ -28,10 +28,10 @@ Install whichever you want. See each plugin's README for usage:
 
 ### One-time setup
 
-Enable the repo's pre-commit hook so commits that change a plugin without bumping its `plugin.json` version are blocked:
+Wire the repo's hooks (pre-commit blocks per-commit drift, pre-push runs the CI version-gate against `origin/main` so you catch cumulative branch drift before pushing):
 
 ```
-git config core.hooksPath .githooks
+bash scripts/setup-hooks.sh
 ```
 
 Plugin caches key off the `version` field. Edits that ship without a bump silently keep consumers on the old code.
@@ -44,4 +44,4 @@ When you change anything under `plugins/<name>/` you must also bump `plugins/<na
 - **minor** (`x.Y.0`) -- new commands / skills / hooks, new behavior
 - **major** (`X.0.0`) -- removed or renamed commands, breaking config
 
-The pre-commit hook (above) enforces this. If you see `ERROR: plugins/... changed without bumping ...`, edit the listed `plugin.json`, stage it, and re-commit.
+The pre-commit and pre-push hooks (above) enforce this; CI is the final backstop. If you see `ERROR: plugins/... changed without bumping ...` (commit) or `FAIL: plugins/... source changed but version still ...` (push/CI), edit the listed `plugin.json`, bump `"version"`, and re-stage.
