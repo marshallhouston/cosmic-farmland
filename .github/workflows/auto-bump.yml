@@ -1,0 +1,82 @@
+name: Auto-bump plugin versions on push to main
+
+# When a push to main changes plugin source without bumping the version,
+# this workflow auto-commits a patch bump. Removes the gate friction for
+# solo-repo flow (vs requiring PR + version-gate.yml). PRs still hit
+# version-gate.yml for explicit-bump discipline.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "plugins/**"
+
+permissions:
+  contents: write
+
+jobs:
+  auto-bump:
+    runs-on: ubuntu-latest
+    # Skip when the commit was made by this workflow itself, to avoid loops.
+    if: ${{ !contains(github.event.head_commit.message, '[auto-bump]') }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Detect plugins needing a bump
+        id: detect
+        run: |
+          set -euo pipefail
+          BASE="${{ github.event.before }}"
+          if ! git cat-file -e "$BASE" 2>/dev/null; then
+            echo "Base commit unavailable; skipping."
+            echo "to_bump=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          CHANGED=$(git diff --name-only "$BASE"...HEAD -- 'plugins/*')
+          [ -z "$CHANGED" ] && { echo "to_bump=" >> "$GITHUB_OUTPUT"; exit 0; }
+
+          PLUGINS=$(echo "$CHANGED" | awk -F/ '{print $2}' | sort -u)
+          TO_BUMP=""
+          for PLUGIN in $PLUGINS; do
+            MANIFEST="plugins/${PLUGIN}/plugin.json"
+            [ -f "$MANIFEST" ] || continue
+            SOURCE_CHANGED=$(echo "$CHANGED" | grep "^plugins/${PLUGIN}/" | grep -v "^${MANIFEST}$" || true)
+            [ -z "$SOURCE_CHANGED" ] && continue
+
+            OLD_V=$(git show "${BASE}:${MANIFEST}" 2>/dev/null | jq -r .version 2>/dev/null || echo "")
+            NEW_V=$(jq -r .version "$MANIFEST")
+            if [ "$OLD_V" = "$NEW_V" ]; then
+              TO_BUMP="${TO_BUMP}${PLUGIN} "
+            fi
+          done
+          echo "to_bump=${TO_BUMP}" >> "$GITHUB_OUTPUT"
+
+      - name: Bump versions
+        if: ${{ steps.detect.outputs.to_bump != '' }}
+        run: |
+          set -euo pipefail
+          for PLUGIN in ${{ steps.detect.outputs.to_bump }}; do
+            MANIFEST="plugins/${PLUGIN}/plugin.json"
+            CURRENT=$(jq -r .version "$MANIFEST")
+            MAJOR=$(echo "$CURRENT" | cut -d. -f1)
+            MINOR=$(echo "$CURRENT" | cut -d. -f2)
+            PATCH=$(echo "$CURRENT" | cut -d. -f3)
+            NEXT="${MAJOR}.${MINOR}.$((PATCH + 1))"
+            jq --arg v "$NEXT" '.version = $v' "$MANIFEST" > "${MANIFEST}.tmp"
+            mv "${MANIFEST}.tmp" "$MANIFEST"
+            echo "Bumped $PLUGIN: $CURRENT -> $NEXT"
+          done
+
+      - name: Commit + push
+        if: ${{ steps.detect.outputs.to_bump != '' }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add plugins/*/plugin.json
+          git commit -m "chore(release): auto-bump $(echo ${{ steps.detect.outputs.to_bump }} | xargs) [auto-bump]"
+          git push origin main
