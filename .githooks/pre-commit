@@ -1,21 +1,22 @@
 #!/usr/bin/env bash
-# Block commits that modify a plugin without bumping its version.
+# Auto-bump a plugin's patch version when its source changes and the
+# manifest wasn't bumped manually. Mutates the staged commit in place.
 #
 # Why: Claude Code plugin caches key off plugins/<name>/plugin.json version.
 # Edits that don't bump version ship into the cache as the same artifact,
-# so consumers keep running the old code. Recurring miss as of 2026-05-07.
+# so consumers keep running the old code. Auto-bump removes the friction
+# of remembering to bump for solo-flow patches. For minor/major bumps,
+# bump manually before committing and this hook will leave it alone.
 set -euo pipefail
 
 CHANGED=$(git diff --cached --name-only --diff-filter=ACMR)
 [ -z "$CHANGED" ] && exit 0
 
-# Map each changed plugin file to its plugin dir.
 TOUCHED_PLUGINS=$(printf '%s\n' "$CHANGED" \
   | awk -F/ '/^plugins\// && NF >= 2 {print $1"/"$2}' \
   | sort -u)
 [ -z "$TOUCHED_PLUGINS" ] && exit 0
 
-FAIL=0
 while IFS= read -r plugin_dir; do
   manifest="$plugin_dir/plugin.json"
   [ -f "$manifest" ] || continue
@@ -26,27 +27,22 @@ while IFS= read -r plugin_dir; do
     | grep -v "^$manifest$" || true)
   [ -z "$non_manifest" ] && continue
 
-  # Is plugin.json itself staged with a version diff?
+  # Is plugin.json itself staged with a version diff? Then trust the human bump.
   if printf '%s\n' "$CHANGED" | grep -qx "$manifest"; then
     if git diff --cached -- "$manifest" | grep -qE '^\+\s*"version"'; then
       continue
     fi
   fi
 
-  current=$(grep -E '"version"[[:space:]]*:' "$manifest" | head -1 | sed -E 's/.*"version"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
-  echo "ERROR: $plugin_dir changed without bumping $manifest" >&2
-  echo "  current version: $current" >&2
-  echo "  changed files:" >&2
-  printf '    %s\n' $non_manifest >&2
-  echo "" >&2
-  echo "  Fix: edit $manifest -> bump \"version\" (semver):" >&2
-  echo "    patch (x.y.Z) for fixes, prose tweaks, internal refactors" >&2
-  echo "    minor (x.Y.0) for new commands/skills/hooks or new behavior" >&2
-  echo "    major (X.0.0) for removed/renamed commands or breaking config" >&2
-  echo "  Then: git add $manifest && git commit ..." >&2
-  echo "" >&2
-  FAIL=1
+  current=$(jq -r .version "$manifest")
+  major=$(echo "$current" | cut -d. -f1)
+  minor=$(echo "$current" | cut -d. -f2)
+  patch=$(echo "$current" | cut -d. -f3)
+  next="${major}.${minor}.$((patch + 1))"
+  jq --arg v "$next" '.version = $v' "$manifest" > "${manifest}.tmp"
+  mv "${manifest}.tmp" "$manifest"
+  git add "$manifest"
+  echo "[pre-commit] auto-bumped $plugin_dir: $current -> $next" >&2
 done <<< "$TOUCHED_PLUGINS"
 
-[ "$FAIL" -ne 0 ] && exit 1
 exit 0
