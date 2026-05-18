@@ -178,7 +178,7 @@ If these aren't true, stop and tell the user.
    ```bash
    START=$SECONDS
    while [ $((SECONDS - START)) -lt 600 ]; do
-     s=$(rw deployment list --service <service> 2>/dev/null | awk 'NR==2{print $3}')
+     s=$(rw deployment list --service <service> 2>/dev/null | sed -n '2p' | grep -oE 'SUCCESS|FAILED|CRASHED|REMOVED|BUILDING|DEPLOYING|QUEUED|INITIALIZING')
      case "$s" in
        SUCCESS|FAILED|CRASHED|REMOVED) echo "deploy=$s after $((SECONDS - START))s"; break ;;
        "") echo "rw deployment list timed out or returned empty. Skipping prod-verify."; break ;;
