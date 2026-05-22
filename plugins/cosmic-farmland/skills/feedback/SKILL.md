@@ -6,11 +6,11 @@ argument-hint: <file-path>
 
 # Feedback -- Section-by-Section Review Loop
 
-Generate a feedback review page for a content file, collect structured feedback, and apply it.
+Open a content file for human review, collect structured feedback, and apply it.
 
 ## When to use
 
-Any time the user wants to review a file section by section and apply structured feedback. Common triggers:
+Any time the user wants to review a file and apply structured feedback. Common triggers:
 - `/feedback <file>`
 - "give me a feedback page for this"
 - "I want to review this draft"
@@ -18,25 +18,38 @@ Any time the user wants to review a file section by section and apply structured
 
 ## How it works
 
-The feedback loop has three phases:
+Three phases: open the file in a review UI, collect feedback, apply it. Step 1 has two paths -- prefer the first.
 
-### 1. Generate the review page
+### 1. Open the file for review
 
-If the project has a feedback generator script (e.g., `_scripts/generate-feedback-html`), use it:
+**Preferred path: `contextbridge open`** (if available on PATH)
+
+```bash
+contextbridge open "<file-path>"
+```
+
+This opens an inline annotation UI in the browser, blocks until the user submits, and writes the user's annotations to stdout as markdown. No copy-paste step. The Bash tool result IS the feedback -- skip phase 2 and go straight to phase 3.
+
+Detect availability:
+
+```bash
+command -v contextbridge >/dev/null 2>&1
+```
+
+**Fallback path: project HTML generator + manual paste**
+
+For machines without `contextbridge`, fall back to the old loop:
+
+If the project has a feedback generator script (e.g., `_scripts/generate-feedback-html`):
 
 ```bash
 bundle exec ruby _scripts/generate-feedback-html "<file-path>"
-```
-
-If no project-specific generator exists, use the `/interactive-review-doc` skill to build the three-panel HTML review page on the fly from the file contents.
-
-Then open the generated HTML:
-
-```bash
 open feedback.html
 ```
 
-### 2. Collect feedback
+If no project-specific generator exists, use the `/interactive-review-doc` skill to build a three-panel HTML review page on the fly, then `open feedback.html`.
+
+### 2. Collect feedback (fallback path only)
 
 Tell the user:
 
@@ -44,9 +57,11 @@ Tell the user:
 
 Wait for the user to paste the feedback markdown.
 
+(With `contextbridge open`, this phase is automatic -- annotations land in the Bash tool result.)
+
 ### 3. Apply feedback
 
-Work through each `## section-name` block in the pasted feedback:
+Work through each comment block (either contextbridge's per-line annotations or the fallback's `## section-name` blocks):
 
 - Find the corresponding section in the original file
 - Apply the requested changes
@@ -56,18 +71,24 @@ Work through each `## section-name` block in the pasted feedback:
 - Handle "add" instructions by inserting content at the appropriate location
 - Handle "cut" instructions by removing the specified content
 
-After applying all section feedback, summarize what changed.
+After applying all feedback, summarize what changed.
 
-## The review page format
+## Why two paths
 
-The review page is a three-panel HTML document:
+`contextbridge open` eliminates the manual copy-paste step that the HTML+paste flow requires. It uses the same transport pattern as PlanBridge: local HTTP server, browser annotation UI, submit -> stdout -> exit. Stdout lands in Claude's tool result naturally.
+
+The HTML+paste fallback stays for machines without `contextbridge` installed and for cases where per-section textareas are genuinely needed (currently rare; inline annotation has proven sufficient for most reviews).
+
+## Fallback review page format
+
+The fallback HTML review page is a three-panel document:
 - **Left sidebar:** section navigation with scroll-spy highlighting
 - **Center:** the content, split by sections
 - **Right panel:** feedback textareas for each section
 
 The user fills in feedback per section, hits "Copy All Feedback", and pastes the markdown back. Only sections with feedback are included in the copy.
 
-## Output format (what the user pastes back)
+## Fallback output format (what the user pastes back)
 
 ```markdown
 # feedback: [document title]
