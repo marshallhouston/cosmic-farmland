@@ -1,0 +1,16 @@
+#!/usr/bin/env sh
+# Block em-dashes / en-dashes in commit messages.
+# Catches subagent-bypassed heredocs, interactive editor commits, merge messages,
+# and anything the hookify Bash rule missed.
+set -e
+
+msg_file="$1"
+if grep -qE $'\xe2\x80\x93|\xe2\x80\x94' "$msg_file"; then
+  echo "BLOCKED: em-dash (U+2014) or en-dash (U+2013) in commit message." >&2
+  echo "Marshall's voice rule: ZERO em/en-dashes in commits." >&2
+  echo "Use period, comma, colon, parens, or '--'." >&2
+  echo "" >&2
+  echo "Offending lines:" >&2
+  grep -nE $'\xe2\x80\x93|\xe2\x80\x94' "$msg_file" >&2 || true
+  exit 1
+fi
