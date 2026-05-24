@@ -51,6 +51,18 @@ def is_primary_worktree(cwd: str) -> bool:
         return False
 
 
+def dirty_files(cwd: str):
+    """Return list of uncommitted (tracked-modified + untracked) paths, or []."""
+    try:
+        out = subprocess.check_output(
+            ["git", "-C", cwd, "status", "--porcelain"],
+            stderr=subprocess.DEVNULL, text=True,
+        )
+        return [ln[3:].strip() for ln in out.splitlines() if ln.strip()]
+    except Exception:
+        return []
+
+
 def main():
     if os.environ.get("CLAUDE_WORKTREE_BYPASS") == "1":
         return 0
@@ -87,16 +99,42 @@ def main():
     slug = branch.replace("/", "-")
     suggested_path = os.path.join(parent, f"{repo_name}-{slug}")
 
-    reason = (
+    dirty = dirty_files(cwd)
+    header = (
         f"Blocked: branch creation from primary worktree ({cwd}).\n"
         f"Marshall rule: ALWAYS worktrees, no exceptions. Branching in the primary "
         f"checkout pollutes main + skips the isolation discipline.\n\n"
-        f"Use instead:\n"
-        f"  git worktree add {suggested_path} -b {branch}\n"
-        f"Then EnterWorktree path={suggested_path} and run your work there.\n\n"
-        f"Bypass (rare, e.g. literal hotfix on main): "
+    )
+    bypass = (
+        f"\nBypass (rare, e.g. literal hotfix on main): "
         f"set CLAUDE_WORKTREE_BYPASS=1 for one command."
     )
+
+    if dirty:
+        # Primary has uncommitted edits. A bare `worktree add` from main would
+        # leave them behind. Carry them across via a global stash (stash is
+        # shared across worktrees of the same repo, so pop works in the new one).
+        listed = "\n".join(f"    {fn}" for fn in dirty[:12])
+        more = f"\n    ... (+{len(dirty) - 12} more)" if len(dirty) > 12 else ""
+        reason = (
+            header
+            + f"Primary has uncommitted changes:\n{listed}{more}\n\n"
+            + "Carry them into a fresh worktree -- run verbatim:\n"
+            + "  1) git -C " + cwd + " stash push -u -m _wt_carry\n"
+            + f"  2) git -C {cwd} worktree add {suggested_path} -b {branch}\n"
+            + f"  3) EnterWorktree path={suggested_path}\n"
+            + f"  4) git -C {suggested_path} stash pop\n"
+            + "Then commit + push from the worktree as usual."
+            + bypass
+        )
+    else:
+        reason = (
+            header
+            + "Use instead:\n"
+            + f"  git worktree add {suggested_path} -b {branch}\n"
+            + f"Then EnterWorktree path={suggested_path} and run your work there."
+            + bypass
+        )
 
     print(json.dumps({
         "hookSpecificOutput": {
