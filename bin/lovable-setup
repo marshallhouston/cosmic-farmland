@@ -98,7 +98,7 @@ if grep -q '"lovable-tagger"' package.json 2>/dev/null; then
 fi
 if grep -q '@lovable.dev/vite-tanstack-config' package.json 2>/dev/null; then
   warn "Uses @lovable.dev/vite-tanstack-config — head/meta live in src/routes/__root.tsx."
-  warn "  Replace the lovable config wrapper with plain TanStack Start + Vite by hand (see lenny-explorer/vite.config.ts)."
+  warn "  Replace the lovable config wrapper with plain TanStack Start + Vite by hand (plain TanStack Start + Vite plugins, no lovable wrapper)."
 fi
 # 4c. Lovable title / og:image meta — best-effort, in HTML.
 while IFS= read -r f; do
