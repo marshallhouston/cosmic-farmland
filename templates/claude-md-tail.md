@@ -22,3 +22,4 @@ RTK token-proxy + caveman mode · memory discipline (`/systematize` over saving)
 - **Stack:** Vitest + Testing Library (jsdom).
 - **Run:** `bun run test` (watch: `bun run test:watch`).
 - **Required before commit/merge.** Keep the smoke test green; add tests alongside features.
+- **Deploy gate:** `.githooks/pre-push` runs the suite on every push to `main` and blocks the push if it fails (activate once: `git config core.hooksPath .githooks`; worktrees inherit it). Bypass non-code pushes with `git push --no-verify`.
