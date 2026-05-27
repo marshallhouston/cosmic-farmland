@@ -4,7 +4,9 @@
 
 Cross-project scripts and a Claude Code plugin for my dev workflow.
 
-- `bin/` — standalone shell scripts
+- `bin/` -- standalone shell scripts (e.g. `lovable-setup`: de-brand + configure a fresh
+  Lovable export -- tests, deps, tokensave, GitHub + Railway). Symlink them onto PATH with
+  `bash bin/install.sh`.
 - `plugins/cosmic-farmland/` — Claude Code plugin with skills, commands, and hooks
 - `plugins/obsidian-weaver/` — Claude Code plugin: Obsidian vault interface + auto-weaving knowledge graph
 
@@ -32,6 +34,13 @@ Wire the repo's hooks (pre-commit blocks per-commit drift, pre-push runs the CI 
 
 ```
 bash scripts/setup-hooks.sh
+```
+
+Symlink the `bin/` scripts onto your PATH (`~/bin`) so they're runnable anywhere and always
+track source (no stale copies). Non-clobbering -- skips links that point elsewhere:
+
+```
+bash bin/install.sh
 ```
 
 Plugin caches key off the `version` field. Edits that ship without a bump silently keep consumers on the old code.
