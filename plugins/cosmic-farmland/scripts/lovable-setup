@@ -24,6 +24,18 @@ warn()  { echo -e "${YELLOW}⚠${NC} $1"; }
 fail()  { echo -e "${RED}✗${NC} $1"; exit 1; }
 ask()   { local r; read -p "$(echo -e "${BLUE}▸${NC}") $1 [y/N] " -n 1 -r; echo ""; [[ $r =~ ^[Yy]$ ]]; }
 
+# brew_offer <cmd> <formula> <purpose>: if <cmd> is missing, offer to brew-install
+# it. Returns 0 if the command is available afterward, 1 if still missing.
+brew_offer() {
+  command -v "$1" >/dev/null 2>&1 && return 0
+  if command -v brew >/dev/null 2>&1; then
+    ask "$1 not found ($3). Install via 'brew install $2'?" && brew install "$2" && return 0
+  else
+    warn "$1 missing ($3) and Homebrew absent -- install $1 manually."
+  fi
+  return 1
+}
+
 # Resolve this script's dir (follow symlinks) to find the shared CLAUDE.md tail.
 SOURCE="${BASH_SOURCE[0]}"
 while [ -h "$SOURCE" ]; do
@@ -43,8 +55,8 @@ echo -e "${BLUE}━━━ lovable-setup: $PROJECT_NAME ━━━${NC}"
 echo ""
 
 # ── Preflight ─────────────────────────────────────────────────────────
-command -v bun >/dev/null 2>&1 || fail "bun not found. Install: brew install oven-sh/bun/bun"
-command -v git >/dev/null 2>&1 || fail "git not found"
+brew_offer git git "version control" || fail "git is required -- install it and re-run"
+brew_offer bun oven-sh/bun/bun "package manager + builds" || fail "bun is required -- install it and re-run"
 [ -f package.json ] || fail "No package.json in $PROJECT_DIR"
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || fail "Not a git repository"
 
@@ -278,7 +290,7 @@ else
 fi
 
 # ── tokensave — index for code-graph exploration ─────────────────────
-if command -v tokensave >/dev/null 2>&1; then
+if brew_offer tokensave aovestdipaperino/tap/tokensave "code-graph exploration"; then
   if [ -d .tokensave ]; then
     info "tokensave already initialized — syncing..."
     tokensave sync >/dev/null 2>&1 || true
@@ -292,7 +304,7 @@ if command -v tokensave >/dev/null 2>&1; then
     fi
   fi
 else
-  warn "tokensave not on PATH — skipping code-graph index"
+  warn "Skipping tokensave code-graph index (not installed)."
 fi
 
 # ── 11. Build + test verification (+ fix static start dir) ────────────
@@ -343,18 +355,18 @@ if git remote get-url origin >/dev/null 2>&1; then
   info "Pushing to existing origin..."
   git push --force-with-lease 2>/dev/null || git push
   ok "Pushed"
-elif command -v gh >/dev/null 2>&1; then
+elif brew_offer gh gh "create the GitHub repo"; then
   if ask "Create a PRIVATE GitHub repo and push?"; then
     gh repo create "$PROJECT_NAME" --private --source=. --push
     ok "GitHub repo created + pushed"
   fi
 else
-  warn "No origin + gh not installed — skipping GitHub. Install: brew install gh"
+  warn "Skipping GitHub -- no gh CLI."
 fi
 
 # ── 14. Railway ───────────────────────────────────────────────────────
 echo ""
-if command -v railway >/dev/null 2>&1; then
+if brew_offer railway railway "deploy to Railway"; then
   if railway status >/dev/null 2>&1; then
     ok "Railway project already linked — skipping create"
   elif ask "Set up a Railway project?"; then
@@ -371,7 +383,7 @@ if command -v railway >/dev/null 2>&1; then
     fi
   fi
 else
-  warn "Railway CLI not installed — skipping. Install: brew install railway"
+  warn "Skipping Railway -- no railway CLI."
 fi
 
 # ── 15. The one manual step: GitHub → Railway auto-deploy ─────────────
