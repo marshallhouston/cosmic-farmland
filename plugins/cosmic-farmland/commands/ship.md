@@ -30,7 +30,7 @@ If not, stop and tell the user.
 
 3. **Poll until green — background, not foreground.** Run `${CLAUDE_PLUGIN_ROOT}/scripts/ship-poll.sh <pr>` with `run_in_background: true`, then arm `Monitor` on its output file:
    ```
-   tail -n 0 -F <bg-output-file> | grep -E --line-buffered "READY|READY_NO_CHECKS|FAILURE|merged|closed"
+   tail -n 0 -F <bg-output-file> | grep -E --line-buffered "READY|READY_NO_CHECKS|FAILURE|merged|closed|TIMEOUT"
    ```
    Surface the output-file path in your reply so the user can `! tail -f` it. The script emits one heartbeat per tick and a final verdict token. Act on it:
    - `merged` → auto-merge already fired; skip to step 6.
@@ -55,7 +55,7 @@ If not, stop and tell the user.
    - Then `git checkout main 2>&1 | tail -2; git pull --ff-only 2>&1 | tail -3`.
    - Local-branch cleanup is mandatory: the pretool hook strips `--delete-branch` inside a worktree, so the merge only deleted the *remote* branch.
 
-6a. **Verify prod deploy** (skip if no `railway.json`). Run `${CLAUDE_PLUGIN_ROOT}/scripts/ship-verify-deploy.sh <pr> <service> [health-url]` with `run_in_background: true`; report the deploy line as a follow-up when it exits. The script handles the timeout/auth/diff-gate/poll logic and exits 0 (verified or cleanly skipped) or 2 (couldn't verify → tell user to check the dashboard). Get `<service>` from `railway status --json` (the service whose source repo matches this one). A green check is not a green deploy — preview and prod pass different gates.
+6a. **Verify prod deploy** (skip if no `railway.json`). Run `${CLAUDE_PLUGIN_ROOT}/scripts/ship-verify-deploy.sh <pr> <service> [health-url]` with `run_in_background: true`; report the deploy line as a follow-up when it exits. The script handles the timeout/auth/diff-gate/poll logic and exits 0 (verified or cleanly skipped) or 2 (couldn't verify → tell user to check the dashboard). Get `<service>` from `railway status --json` (the service whose source repo matches this one); derive `[health-url]` from the prod domain + the repo's health path (e.g. `https://<domain>/api/health`) — omit it if unknown. A green check is not a green deploy — preview and prod pass different gates. **If the deploy line reports `FAILED`/`CRASHED`, investigate per the step-3a discipline (pull logs, name root cause) — don't just relay the string.**
 
 7. **Report.** One or two sentences: PR number, merged URL, cleanup status. Note if prod-verify is running in background (status follows) or was skipped. Nothing more.
 
