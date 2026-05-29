@@ -30,7 +30,7 @@ Install whichever you want. See each plugin's README for usage:
 
 ### One-time setup
 
-Wire the repo's hooks (pre-commit blocks per-commit drift, pre-push runs the CI version-gate against `origin/main` so you catch cumulative branch drift before pushing):
+Wire the repo's hooks (pre-commit blocks per-commit drift, pre-push runs the version-gate against `origin/main` plus the hook contract tests, so you catch cumulative branch drift and hook regressions before pushing):
 
 ```
 bash scripts/setup-hooks.sh
@@ -45,6 +45,16 @@ bash bin/install.sh
 
 Plugin caches key off the `version` field. Edits that ship without a bump silently keep consumers on the old code.
 
+### Testing the hooks
+
+The Stop/PreToolUse hooks gate every turn, so they have contract tests. Stdlib only -- no install:
+
+```
+python3 -m unittest discover -s tests -v
+```
+
+The pre-push hook runs them automatically (no CI in this repo by design).
+
 ### Editing a plugin
 
 When you change anything under `plugins/<name>/` you must also bump `plugins/<name>/plugin.json` `"version"` in the same commit. Semver:
@@ -53,4 +63,4 @@ When you change anything under `plugins/<name>/` you must also bump `plugins/<na
 - **minor** (`x.Y.0`) -- new commands / skills / hooks, new behavior
 - **major** (`X.0.0`) -- removed or renamed commands, breaking config
 
-The pre-commit and pre-push hooks (above) enforce this; CI is the final backstop. If you see `ERROR: plugins/... changed without bumping ...` (commit) or `FAIL: plugins/... source changed but version still ...` (push/CI), edit the listed `plugin.json`, bump `"version"`, and re-stage.
+The pre-commit and pre-push hooks (above) enforce this. If you see `ERROR: plugins/... changed without bumping ...` (commit) or `FAIL: plugins/... source changed but version still ...` (push), edit the listed `plugin.json`, bump `"version"`, and re-stage.
