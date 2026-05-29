@@ -60,8 +60,8 @@ if ! gh pr diff "$PR" --name-only | grep -qvE '\.mdx?$|^docs/|\.test\.|\.spec\.|
   exit 0
 fi
 
-# Poll for terminal deploy state. Cap 10 min; 10s tick keeps SUCCESS responsive
-# (build dominates wall-clock anyway).
+# Poll for terminal deploy state. Cap 10 min (60 ticks of 10s); 10s tick keeps
+# SUCCESS responsive (build dominates wall-clock anyway).
 START=$SECONDS
 while [ $((SECONDS - START)) -lt 600 ]; do
   s=$(rw deployment list --service "$SERVICE" 2>/dev/null | sed -n '2p' \

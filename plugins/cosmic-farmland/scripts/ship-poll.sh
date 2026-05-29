@@ -45,8 +45,8 @@ while [ $((SECONDS - START)) -lt 1200 ]; do
 
   if [ "$STATE" = "OPEN" ] && [ "$PEND" = "0" ]; then
     PASSED=$(jq -r '[.checks[] | select(.s=="SUCCESS")] | length' <<<"$SNAP")
-    if [ "$PASSED" -gt 0 ]; then echo "READY"; exit 0
-    elif [ "$T" -gt 60 ]; then  echo "READY_NO_CHECKS"; exit 0
+    if   [ "$PASSED" -gt 0 ]; then echo "READY"; exit 0
+    elif [ "$T" -gt 60 ];     then echo "READY_NO_CHECKS"; exit 0
     fi
   fi
   sleep 20
