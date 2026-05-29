@@ -8,9 +8,12 @@ argument-hint: "[days] (default: all history) [skill-substring] (filter)"
 
 Counts every `Skill` tool invocation across ALL Claude Code projects on this
 machine, straight from the session JSONL. Retroactive, zero infra, real names
-(no OTel redaction). Complements the Honeycomb **Skill Usage** board, which is
-live but only un-redacts your own skills after `OTEL_LOG_TOOL_DETAILS=1` (set
-2026-05-29) and is the source of truth for **trigger mix** and **token/$ cost**.
+(no OTel redaction). Works standalone — no observability backend required.
+
+If you also export Claude Code OTel to a backend (e.g. Honeycomb), that is the
+source of truth for **trigger mix** and **token/$ cost** (transcripts can't give
+those — see step 5). Skill names there are redacted to `custom_skill` unless you
+set `OTEL_LOG_TOOL_DETAILS=1`.
 
 ## When to use
 
@@ -24,8 +27,8 @@ live but only un-redacts your own skills after `OTEL_LOG_TOOL_DETAILS=1` (set
 - **Can:** invocation count per skill, distinct sessions + projects, first/last
   seen, full history. Names are verbatim (transcripts aren't redacted).
 - **Can't:** trigger type (transcripts log every call `caller.type:"direct"` —
-  proactive vs slash vs nested only exists in OTel) and token/$ cost. For those,
-  open the Honeycomb board (link in step 5).
+  proactive vs slash vs nested only exists in OTel) and token/$ cost. Those
+  need an OTel backend (see step 5); without one, this report is the full story.
 
 ## Steps
 
@@ -102,9 +105,13 @@ live but only un-redacts your own skills after `OTEL_LOG_TOOL_DETAILS=1` (set
    skills from the plugin/skill dirs and diff against `cnt` keys. Flag the
    gaps; do NOT delete anything — just report.
 
-5. Point to the live view for the dimensions transcripts can't give:
-   > Trigger mix (proactive/slash/nested) + token + $ cost per skill:
-   > Honeycomb board "Skill Usage" — https://ui.honeycomb.io/justpreach.app/environments/production/datasets/claude-code
+5. Point to the live view for the dimensions transcripts can't give —
+   trigger mix (proactive/slash/nested) + token/$ cost per skill. These need
+   Claude Code OTel export to an observability backend; the transcript report
+   above needs none of that and works standalone.
+   > If you export Claude Code OTel to your own Honeycomb, build a board over
+   > the `claude-code` dataset grouped by skill for trigger mix + cost.
+   > (Internal preach board, access-gated: https://ui.honeycomb.io/justpreach.app/environments/production/datasets/claude-code)
 
 6. Keep output tight. Ranked table + headline + (if asked) prune list. Don't
    dump per-session detail unless asked.
@@ -113,8 +120,8 @@ live but only un-redacts your own skills after `OTEL_LOG_TOOL_DETAILS=1` (set
 
 - Don't write any file or open a browser unless the user asks — this is a
   read-only report by default.
-- Don't conflate with the Honeycomb board's numbers: transcripts count *every*
-  Skill tool call with real names over all history; the board counts
+- Don't conflate with any OTel board's numbers: transcripts count *every*
+  Skill tool call with real names over all history; an OTel board counts
   `skill_activated` events (redacted pre-flag) and is the only source for
   trigger + cost. They will not match exactly, by design.
 - Don't recommend deleting a skill on count alone — a rarely-used skill may be
