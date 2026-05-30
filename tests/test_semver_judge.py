@@ -102,3 +102,29 @@ class TestDiffLevel(unittest.TestCase):
             "D\tplugins/cosmic-farmland/skills/old/SKILL.md",
         )
         self.assertEqual(sj.diff_level(lines, self.P), "major")
+
+
+class TestVersionMath(unittest.TestCase):
+    def test_parse_format_roundtrip(self):
+        self.assertEqual(sj.format_version(sj.parse_version("1.10.0")), "1.10.0")
+
+    def test_apply_patch(self):
+        self.assertEqual(sj.bump_version("1.10.3", "patch"), "1.10.4")
+
+    def test_apply_minor_zeroes_patch(self):
+        self.assertEqual(sj.bump_version("1.10.3", "minor"), "1.11.0")
+
+    def test_apply_major_zeroes_minor_patch(self):
+        self.assertEqual(sj.bump_version("1.10.3", "major"), "2.0.0")
+
+    def test_infer_patch(self):
+        self.assertEqual(sj.infer_level("1.10.0", "1.10.1"), "patch")
+
+    def test_infer_minor(self):
+        self.assertEqual(sj.infer_level("1.10.0", "1.11.0"), "minor")
+
+    def test_infer_major(self):
+        self.assertEqual(sj.infer_level("1.10.0", "2.0.0"), "major")
+
+    def test_infer_equal_is_none(self):
+        self.assertIsNone(sj.infer_level("1.10.0", "1.10.0"))

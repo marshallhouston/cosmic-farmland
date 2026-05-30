@@ -99,3 +99,33 @@ def diff_level(status_lines, plugin):
 def floor_level(messages, status_lines, plugin):
     """The deterministic floor: max(message_level, diff_level)."""
     return max_level(message_level(messages), diff_level(status_lines, plugin))
+
+
+def parse_version(s):
+    major, minor, patch = (int(x) for x in s.split(".")[:3])
+    return (major, minor, patch)
+
+
+def format_version(v):
+    return "%d.%d.%d" % v
+
+
+def bump_version(version_str, level):
+    major, minor, patch = parse_version(version_str)
+    if level == "major":
+        return format_version((major + 1, 0, 0))
+    if level == "minor":
+        return format_version((major, minor + 1, 0))
+    return format_version((major, minor, patch + 1))
+
+
+def infer_level(old_str, new_str):
+    """Level implied by old->new, or None if unchanged."""
+    old, new = parse_version(old_str), parse_version(new_str)
+    if new[0] > old[0]:
+        return "major"
+    if new[1] > old[1]:
+        return "minor"
+    if new[2] > old[2]:
+        return "patch"
+    return None
