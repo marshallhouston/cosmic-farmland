@@ -129,3 +129,165 @@ def infer_level(old_str, new_str):
     if new[2] > old[2]:
         return "patch"
     return None
+
+
+def _git(*args):
+    return subprocess.run(
+        ["git", *args], capture_output=True, text=True, check=True
+    ).stdout
+
+
+def _manifest_path(plugin):
+    return "plugins/%s/plugin.json" % plugin
+
+
+def _read_version(plugin):
+    with open(_manifest_path(plugin)) as f:
+        return json.load(f)["version"]
+
+
+def _base_version(plugin, base):
+    """Version of this plugin's manifest at `base` (e.g. origin/main).
+    Returns None when the ref or manifest is absent (new plugin / no base)."""
+    try:
+        blob = _git("show", "%s:%s" % (base, _manifest_path(plugin)))
+        return json.loads(blob)["version"]
+    except (subprocess.CalledProcessError, ValueError, KeyError):
+        return None
+
+
+def _commit_messages(base):
+    """Full messages for base..HEAD, newest-first, NUL-delimited."""
+    out = _git("log", "--format=%B%x00", "%s..HEAD" % base)
+    return [m for m in out.split("\0") if m.strip()]
+
+
+def _status_lines(base, staged):
+    """name-status lines for the plugin diff.
+    staged=True  -> staged changes (pre-commit, no HEAD commit yet).
+    staged=False -> base..HEAD (pre-push, full range)."""
+    if staged:
+        out = _git("diff", "--cached", "--name-status")
+    else:
+        out = _git("diff", "--name-status", "%s..HEAD" % base)
+    return [ln for ln in out.splitlines() if ln.strip()]
+
+
+def _touched_plugins(staged):
+    """Plugin names with changed files (plugins/<name>/...)."""
+    lines = _status_lines("HEAD", staged) if staged else _status_lines("origin/main", False)
+    names = set()
+    for ln in lines:
+        for token in ln.split("\t")[1:]:
+            parts = token.split("/")
+            if len(parts) >= 2 and parts[0] == "plugins":
+                names.add(parts[1])
+    return sorted(names)
+
+
+def _compute_floor(plugin, base, staged):
+    messages = [] if staged else _commit_messages(base)
+    status = _status_lines(base, staged)
+    return floor_level(messages, status, plugin)
+
+
+def cmd_level(plugin, base, staged):
+    print(_compute_floor(plugin, base, staged))
+    return 0
+
+
+def cmd_set(plugin, base, level):
+    """Idempotent, raise-only: set manifest to base+level unless already >= that."""
+    base_v = _base_version(plugin, base)
+    cur_v = _read_version(plugin)
+    if base_v is None:
+        # No base to anchor to (new plugin): only ensure a non-empty version.
+        print("set: %s has no base at %s; leaving %s" % (plugin, base, cur_v))
+        return 0
+    applied = infer_level(base_v, cur_v)
+    if rank(applied) >= rank(level):
+        print("set: %s already %s (>= %s); no change" % (plugin, cur_v, level))
+        return 0
+    target = bump_version(base_v, level)
+    path = _manifest_path(plugin)
+    with open(path) as f:
+        data = json.load(f)
+    data["version"] = target
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2)
+        f.write("\n")
+    print("set: %s %s -> %s (%s from %s)" % (plugin, cur_v, target, level, base_v))
+    return 0
+
+
+def _summary_changes(plugin, base):
+    """Human bits for the push summary: '+skill foo', '-command bar'."""
+    bits = []
+    for ln in _status_lines(base, staged=False):
+        parts = ln.split("\t")
+        code = parts[0]
+        path = parts[-1]
+        if not _is_identifier_path(path, plugin):
+            continue
+        rel = path[len("plugins/%s/" % plugin):]
+        kind = rel.split("/")[0].rstrip("s")  # skills->skill, commands->command
+        name = rel.split("/")[1] if rel.startswith("skills/") else rel.split("/")[1].rsplit(".", 1)[0]
+        sign = {"A": "+", "D": "-"}.get(code[0], "~")
+        bits.append("%s%s %s" % (sign, kind, name))
+    return ", ".join(bits)
+
+
+def cmd_check(plugin, base):
+    """Block (exit 1) if the manifest under-bumped vs the required floor."""
+    base_v = _base_version(plugin, base)
+    if base_v is None:
+        print("check: %s new plugin (no base at %s); skip" % (plugin, base))
+        return 0
+    cur_v = _read_version(plugin)
+    required = _compute_floor(plugin, base, staged=False)
+    applied = infer_level(base_v, cur_v)
+    if rank(applied) < rank(required):
+        target = bump_version(base_v, required)
+        sys.stderr.write(
+            "FAIL: %s needs %s (%s -> %s) but manifest is %s.\n"
+            "      Run: bin/bump %s %s\n"
+            % (plugin, required, base_v, target, cur_v, required, plugin)
+        )
+        return 1
+    changes = _summary_changes(plugin, base)
+    suffix = ": %s" % changes if changes else ""
+    print("%s %s->%s (%s)%s" % (plugin, base_v, cur_v, applied, suffix))
+    return 0
+
+
+def main(argv):
+    import argparse
+    p = argparse.ArgumentParser(prog="semver_judge")
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    pl = sub.add_parser("level")
+    pl.add_argument("--plugin", required=True)
+    pl.add_argument("--base", default="origin/main")
+    pl.add_argument("--staged", action="store_true")
+
+    ps = sub.add_parser("set")
+    ps.add_argument("--plugin", required=True)
+    ps.add_argument("--base", default="origin/main")
+    ps.add_argument("--level", required=True, choices=list(LEVELS))
+
+    pc = sub.add_parser("check")
+    pc.add_argument("--plugin", required=True)
+    pc.add_argument("--base", default="origin/main")
+
+    a = p.parse_args(argv)
+    if a.cmd == "level":
+        return cmd_level(a.plugin, a.base, a.staged)
+    if a.cmd == "set":
+        return cmd_set(a.plugin, a.base, a.level)
+    if a.cmd == "check":
+        return cmd_check(a.plugin, a.base)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
