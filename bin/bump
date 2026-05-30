@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Apply a semver level to a plugin's manifest, idempotently, from origin/main.
+# Used when pre-push blocks with "Run: bin/bump <level> <plugin>".
+#
+#   bin/bump minor                  # default plugin: cosmic-farmland
+#   bin/bump major obsidian-weaver
+set -euo pipefail
+
+LEVEL="${1:?usage: bin/bump <patch|minor|major> [plugin]}"
+PLUGIN="${2:-cosmic-farmland}"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+python3 "$REPO_ROOT/scripts/semver_judge.py" set \
+  --plugin "$PLUGIN" --base origin/main --level "$LEVEL"
+
+git add "$REPO_ROOT/plugins/$PLUGIN/plugin.json"
+echo "[bump] staged plugins/$PLUGIN/plugin.json — commit and re-push"
