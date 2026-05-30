@@ -15,6 +15,11 @@ JUDGE="$REPO_ROOT/scripts/semver_judge.py"
 # Ensure origin/main is present locally for the range diff.
 git fetch --quiet origin main 2>/dev/null || true
 
+if ! git rev-parse --verify --quiet origin/main >/dev/null; then
+  echo "pre-push: cannot resolve origin/main; semver gate cannot run. Fetch and retry." >&2
+  exit 1
+fi
+
 if [ -f "$JUDGE" ]; then
   TOUCHED=$(git diff --name-only origin/main...HEAD -- 'plugins/*' 2>/dev/null \
     | awk -F/ 'NF >= 2 {print $2}' | sort -u)

@@ -10,6 +10,12 @@ LEVEL="${1:?usage: bin/bump <patch|minor|major> [plugin]}"
 PLUGIN="${2:-cosmic-farmland}"
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 
+git fetch --quiet origin main 2>/dev/null || true
+if ! git rev-parse --verify --quiet origin/main >/dev/null; then
+  echo "bin/bump: cannot resolve origin/main; fetch and retry" >&2
+  exit 1
+fi
+
 python3 "$REPO_ROOT/scripts/semver_judge.py" set \
   --plugin "$PLUGIN" --base origin/main --level "$LEVEL"
 

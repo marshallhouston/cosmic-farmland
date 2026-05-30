@@ -22,7 +22,8 @@ TOUCHED_PLUGINS=$(printf '%s\n' "$CHANGED" \
   | sort -u)
 [ -z "$TOUCHED_PLUGINS" ] && exit 0
 
-# Use origin/main as the bump anchor when available (idempotency across commits).
+# Anchor to origin/main for idempotency; HEAD fallback is best-effort
+# (offline). pre-push re-checks against origin/main as the true gate.
 BASE="origin/main"
 git rev-parse --verify --quiet "$BASE" >/dev/null 2>&1 || BASE="HEAD"
 
