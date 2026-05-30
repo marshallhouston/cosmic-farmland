@@ -17,7 +17,6 @@ import subprocess
 import sys
 
 LEVELS = {"patch": 0, "minor": 1, "major": 2}
-_PATCH_TYPES = {"fix", "perf", "refactor", "docs", "chore", "test", "style", "ci", "build"}
 _SUBJECT_RE = re.compile(r"^(?P<type>\w+)(?:\([^)]*\))?(?P<bang>!)?:")
 
 
@@ -171,18 +170,6 @@ def _status_lines(base, staged):
     else:
         out = _git("diff", "--name-status", "%s..HEAD" % base)
     return [ln for ln in out.splitlines() if ln.strip()]
-
-
-def _touched_plugins(staged):
-    """Plugin names with changed files (plugins/<name>/...)."""
-    lines = _status_lines("HEAD", staged) if staged else _status_lines("origin/main", False)
-    names = set()
-    for ln in lines:
-        for token in ln.split("\t")[1:]:
-            parts = token.split("/")
-            if len(parts) >= 2 and parts[0] == "plugins":
-                names.add(parts[1])
-    return sorted(names)
 
 
 def _compute_floor(plugin, base, staged):

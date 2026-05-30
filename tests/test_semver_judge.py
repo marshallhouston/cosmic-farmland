@@ -49,6 +49,10 @@ class TestMessageLevel(unittest.TestCase):
     def test_empty_range_is_patch(self):
         self.assertEqual(sj.message_level([]), "patch")
 
+    def test_breaking_change_in_later_commit_of_range(self):
+        msgs = ["chore: a", "feat: b", "fix: c\n\nBREAKING CHANGE: x"]
+        self.assertEqual(sj.message_level(msgs), "major")
+
 
 class TestDiffLevel(unittest.TestCase):
     P = "cosmic-farmland"
@@ -128,3 +132,21 @@ class TestVersionMath(unittest.TestCase):
 
     def test_infer_equal_is_none(self):
         self.assertIsNone(sj.infer_level("1.10.0", "1.10.0"))
+
+
+class TestFloorComposition(unittest.TestCase):
+    def test_diff_outranks_message(self):
+        self.assertEqual(
+            sj.floor_level(["fix: tweak"],
+                           ["A\tplugins/cosmic-farmland/skills/new/SKILL.md"],
+                           "cosmic-farmland"),
+            "minor",
+        )
+
+    def test_message_outranks_diff(self):
+        self.assertEqual(
+            sj.floor_level(["feat: enhance"],
+                           ["M\tplugins/cosmic-farmland/skills/next/SKILL.md"],
+                           "cosmic-farmland"),
+            "minor",
+        )
