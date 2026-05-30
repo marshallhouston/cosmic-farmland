@@ -172,6 +172,16 @@ def _status_lines(base, staged):
     return [ln for ln in out.splitlines() if ln.strip()]
 
 
+def _plugin_changed(plugin, base):
+    """True if any file under plugins/<plugin>/ changed in base..HEAD."""
+    prefix = "plugins/%s/" % plugin
+    for ln in _status_lines(base, staged=False):
+        for token in ln.split("\t")[1:]:
+            if token.startswith(prefix):
+                return True
+    return False
+
+
 def _compute_floor(plugin, base, staged):
     messages = [] if staged else _commit_messages(base)
     status = _status_lines(base, staged)
@@ -229,6 +239,9 @@ def cmd_check(plugin, base):
     base_v = _base_version(plugin, base)
     if base_v is None:
         print("check: %s new plugin (no base at %s); skip" % (plugin, base))
+        return 0
+    if not _plugin_changed(plugin, base):
+        print("check: no %s changes in %s..HEAD; skip" % (plugin, base))
         return 0
     cur_v = _read_version(plugin)
     required = _compute_floor(plugin, base, staged=False)
