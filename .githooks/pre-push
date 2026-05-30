@@ -1,15 +1,33 @@
 #!/usr/bin/env bash
 # Pre-push: enforcement gate (no CI in this repo by design).
-#   1. version-gate against origin/main -- catches cumulative branch drift
-#      before push (uses origin/main...HEAD; per-commit pre-commit can't see that).
-#   2. hook contract tests -- the Stop/PreToolUse hooks gate every turn, so a
+#   1. semver gate -- recompute each touched plugin's required floor over
+#      origin/main..HEAD (commit types + diff structure) and BLOCK if the
+#      manifest under-bumped. Supersedes the old differs-only check: it asserts
+#      the LEVEL is correct, not merely that the version changed. Prints a
+#      one-line push summary per plugin (cross-repo awareness).
+#   2. hook contract tests -- Stop/PreToolUse hooks gate every turn; a
 #      regression must not reach main.
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+JUDGE="$REPO_ROOT/scripts/semver_judge.py"
 
-SCRIPT="$REPO_ROOT/scripts/check-plugin-version.sh"
-[ -x "$SCRIPT" ] && BASE_REF="origin/main" bash "$SCRIPT"
+# Ensure origin/main is present locally for the range diff.
+git fetch --quiet origin main 2>/dev/null || true
+
+if ! git rev-parse --verify --quiet origin/main >/dev/null; then
+  echo "pre-push: cannot resolve origin/main; semver gate cannot run. Fetch and retry." >&2
+  exit 1
+fi
+
+if [ -f "$JUDGE" ]; then
+  TOUCHED=$(git diff --name-only origin/main...HEAD -- 'plugins/*' 2>/dev/null \
+    | awk -F/ 'NF >= 2 {print $2}' | sort -u)
+  for plugin in $TOUCHED; do
+    [ -f "$REPO_ROOT/plugins/$plugin/plugin.json" ] || continue
+    python3 "$JUDGE" check --plugin "$plugin" --base origin/main
+  done
+fi
 
 if [ -d "$REPO_ROOT/tests" ]; then
   python3 -m unittest discover -s "$REPO_ROOT/tests" >/dev/null

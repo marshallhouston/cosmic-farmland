@@ -1,5 +1,6 @@
 graphify-out/
 out/
 .tokensave
+__pycache__/
 
 .claude/

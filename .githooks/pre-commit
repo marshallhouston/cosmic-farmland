@@ -1,48 +1,45 @@
 #!/usr/bin/env bash
-# Auto-bump a plugin's patch version when its source changes and the
-# manifest wasn't bumped manually. Mutates the staged commit in place.
+# Auto-bump each touched plugin to its deterministic FLOOR (not always patch),
+# computed from the staged diff structure. Idempotent + raise-only: anchored to
+# origin/main, so repeated commits on a branch don't double-count, and a manual
+# higher bump is never lowered. pre-push recomputes over the full range
+# (including commit-message types) and blocks if this under-bumped.
 #
 # Why: Claude Code plugin caches key off plugins/<name>/plugin.json version.
-# Edits that don't bump version ship into the cache as the same artifact,
-# so consumers keep running the old code. Auto-bump removes the friction
-# of remembering to bump for solo-flow patches. For minor/major bumps,
-# bump manually before committing and this hook will leave it alone.
+# A new skill is a MINOR (new invokable surface); a removed skill is a MAJOR.
+# The old always-patch bump mislabeled both — see docs/plans/semver-judgment.md.
 set -euo pipefail
 
-CHANGED=$(git diff --cached --name-only --diff-filter=ACMR)
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+JUDGE="$REPO_ROOT/scripts/semver_judge.py"
+[ -f "$JUDGE" ] || exit 0
+
+CHANGED=$(git diff --cached --name-only --diff-filter=ACMRD)
 [ -z "$CHANGED" ] && exit 0
 
 TOUCHED_PLUGINS=$(printf '%s\n' "$CHANGED" \
-  | awk -F/ '/^plugins\// && NF >= 2 {print $1"/"$2}' \
+  | awk -F/ '/^plugins\// && NF >= 2 {print $2}' \
   | sort -u)
 [ -z "$TOUCHED_PLUGINS" ] && exit 0
 
-while IFS= read -r plugin_dir; do
-  manifest="$plugin_dir/plugin.json"
-  [ -f "$manifest" ] || continue
+# Anchor to origin/main for idempotency; HEAD fallback is best-effort
+# (offline). pre-push re-checks against origin/main as the true gate.
+BASE="origin/main"
+git rev-parse --verify --quiet "$BASE" >/dev/null 2>&1 || BASE="HEAD"
 
-  # Did anything OTHER than plugin.json change in this plugin?
+while IFS= read -r plugin; do
+  [ -z "$plugin" ] && continue
+  manifest="plugins/$plugin/plugin.json"
+  [ -f "$REPO_ROOT/$manifest" ] || continue
+
+  # Did anything OTHER than the manifest change in this plugin?
   non_manifest=$(printf '%s\n' "$CHANGED" \
-    | grep "^$plugin_dir/" \
-    | grep -v "^$manifest$" || true)
+    | grep "^plugins/$plugin/" | grep -v "^$manifest$" || true)
   [ -z "$non_manifest" ] && continue
 
-  # Is plugin.json itself staged with a version diff? Then trust the human bump.
-  if printf '%s\n' "$CHANGED" | grep -qx "$manifest"; then
-    if git diff --cached -- "$manifest" | grep -qE '^\+\s*"version"'; then
-      continue
-    fi
-  fi
-
-  current=$(jq -r .version "$manifest")
-  major=$(echo "$current" | cut -d. -f1)
-  minor=$(echo "$current" | cut -d. -f2)
-  patch=$(echo "$current" | cut -d. -f3)
-  next="${major}.${minor}.$((patch + 1))"
-  jq --arg v "$next" '.version = $v' "$manifest" > "${manifest}.tmp"
-  mv "${manifest}.tmp" "$manifest"
-  git add "$manifest"
-  echo "[pre-commit] auto-bumped $plugin_dir: $current -> $next" >&2
+  level=$(python3 "$JUDGE" level --plugin "$plugin" --base "$BASE" --staged)
+  python3 "$JUDGE" set --plugin "$plugin" --base "$BASE" --level "$level" >&2
+  git add "$REPO_ROOT/$manifest"
 done <<< "$TOUCHED_PLUGINS"
 
 exit 0
