@@ -113,6 +113,45 @@ set `OTEL_LOG_TOOL_DETAILS=1`.
    > the `claude-code` dataset grouped by skill for trigger mix + cost.
    > (Internal preach board, access-gated: https://ui.honeycomb.io/justpreach.app/environments/production/datasets/claude-code)
 
+## OTel setup (optional — for the live trigger + cost half)
+
+The transcript report needs none of this. To also get trigger mix + cost in
+Honeycomb, three machine-local pieces (none can live in this repo — the first
+two carry a personal API key / shell config):
+
+1. **Exporter env** in `~/.claude/settings.json` (`env` block). Sends CC
+   telemetry to your backend. Set `OTEL_LOG_TOOL_DETAILS=1` too:
+   ```json
+   "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+   "OTEL_METRICS_EXPORTER": "otlp",
+   "OTEL_LOGS_EXPORTER": "otlp",
+   "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
+   "OTEL_EXPORTER_OTLP_ENDPOINT": "https://api.honeycomb.io",
+   "OTEL_EXPORTER_OTLP_HEADERS": "x-honeycomb-team=<YOUR_KEY>",
+   "OTEL_LOG_TOOL_DETAILS": "1"
+   ```
+   Do **not** put `OTEL_RESOURCE_ATTRIBUTES` here — settings env wins over the
+   shell, which would clobber the per-repo `project` tag from step 2.
+
+2. **Per-repo `project` tag** via a shell wrapper around `claude` (so worktrees
+   fold to their main repo, not the suffixed dir):
+   ```sh
+   proj=$(basename "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)")")
+   case "$proj" in ""|.|/) proj=$(basename "$PWD") ;; esac
+   export OTEL_RESOURCE_ATTRIBUTES="service.name=claude-code,project=$proj,user.id=<you>"
+   ```
+
+3. **Real names for local skills** — this plugin's `skill-telemetry.py`
+   PreToolUse(`Skill`) hook (auto-active when the plugin is installed). CC
+   redacts locally-sourced skill names (`skill.source` = userSettings /
+   projectSettings / local plugin-dir) to `custom_skill` and exposes no
+   `tool_use_id` to join the real name back. The hook reads the real name from
+   `tool_input` before the call and posts `event.name=skill.invoked` to the
+   `claude-code` dataset with real name + `project` + best-effort trigger
+   (`user-slash` exact; proactive/nested collapse to `model`). It reads the
+   Honeycomb key from `OTEL_EXPORTER_OTLP_HEADERS`, posts in the background,
+   and never blocks a skill call. No key in env → no-op.
+
 6. Keep output tight. Ranked table + headline + (if asked) prune list. Don't
    dump per-session detail unless asked.
 
