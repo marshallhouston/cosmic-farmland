@@ -1,9 +1,9 @@
 # lovable-setup: TanStack-Start SSR support
 
 **Date:** 2026-06-02
-**Status:** Approved (design) — pending spec review
+**Status:** Implemented (PR #30)
 **Script:** `plugins/cosmic-farmland/scripts/lovable-setup`
-**Skill:** `plugins/cosmic-farmland/skills/lovable-setup/SKILL.md`
+**Command:** `plugins/cosmic-farmland/commands/lovable-setup.md`
 
 ## Problem
 

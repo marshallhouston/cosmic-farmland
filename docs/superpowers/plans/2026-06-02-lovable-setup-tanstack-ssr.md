@@ -9,7 +9,7 @@
 **Tech Stack:** Bash, Bun, Vite, TanStack Start (`@tanstack/react-start` + nitro toolchain), Railway.
 
 **Repos:**
-- **Tool (edit here):** `~/code/cosmic-farmland-feat-lovable-setup-tanstack-ssr` (worktree, branch `feat/lovable-setup-tanstack-ssr`). Script: `plugins/cosmic-farmland/scripts/lovable-setup`. Skill: `plugins/cosmic-farmland/skills/lovable-setup/SKILL.md`.
+- **Tool (edit here):** `~/code/cosmic-farmland-feat-lovable-setup-tanstack-ssr` (worktree, branch `feat/lovable-setup-tanstack-ssr`). Script: `plugins/cosmic-farmland/scripts/lovable-setup`. Command: `plugins/cosmic-farmland/commands/lovable-setup.md`.
 - **Fixture (verify against):** `~/code/dead-77-odyssey` — a real `tanstack-ssr` Lovable export. For iterative tests, use a throwaway copy at `/tmp/ls-fixture` with `origin` removed (so no accidental push).
 
 > **Editing constraint:** the session cwd is in `dead-77-odyssey`, so the Write/Edit tools are blocked from the cosmic-farmland worktree by the worktree-path guard. Edit cosmic-farmland files via **Bash** (`cat`/`sed`/`python3`), or stage with the Write tool under `/tmp` then `mv` into the worktree.
@@ -21,7 +21,7 @@
 | File | Responsibility | Change |
 |------|----------------|--------|
 | `plugins/cosmic-farmland/scripts/lovable-setup` | the installer | Modify: shape detection, shim+start (SSR branch), build-verify (SSR branch), de-brand (wrapper swap + `__root.tsx`), Railway/CLAUDE.md guidance |
-| `plugins/cosmic-farmland/skills/lovable-setup/SKILL.md` | skill doc | Modify: document the three shapes + SSR deploy |
+| `plugins/cosmic-farmland/commands/lovable-setup.md` | skill doc | Modify: document the three shapes + SSR deploy |
 | `server-entry.ts` (in target repo, emitted by the script) | bun-serve runtime shim | Created at runtime via heredoc inside the script |
 | `vite.config.ts` (in target repo) | de-branded plain config | Rewritten at runtime, build-gated + `.bak` rollback |
 
@@ -470,15 +470,15 @@ git -C ~/code/cosmic-farmland-feat-lovable-setup-tanstack-ssr commit -m "feat(lo
 
 ---
 
-## Task 6: Document the three shapes in SKILL.md
+## Task 6: Document the three shapes in commands/lovable-setup.md
 
 **Files:**
-- Modify: `plugins/cosmic-farmland/skills/lovable-setup/SKILL.md`
+- Modify: `plugins/cosmic-farmland/commands/lovable-setup.md`
 
 - [ ] **Step 1: Read the current skill doc** to match its style.
 
 ```bash
-cat ~/code/cosmic-farmland-feat-lovable-setup-tanstack-ssr/plugins/cosmic-farmland/skills/lovable-setup/SKILL.md
+cat ~/code/cosmic-farmland-feat-lovable-setup-tanstack-ssr/plugins/cosmic-farmland/commands/lovable-setup.md
 ```
 
 - [ ] **Step 2: Add a "Supported shapes" section.** Append (or merge into the existing structure) this content, adapting headings to the doc's existing style:
@@ -513,7 +513,7 @@ Tested against shapes: `tanstack-ssr` (dead-77-odyssey).
 - [ ] **Step 3: Commit.**
 
 ```bash
-git -C ~/code/cosmic-farmland-feat-lovable-setup-tanstack-ssr add plugins/cosmic-farmland/skills/lovable-setup/SKILL.md
+git -C ~/code/cosmic-farmland-feat-lovable-setup-tanstack-ssr add plugins/cosmic-farmland/commands/lovable-setup.md
 git -C ~/code/cosmic-farmland-feat-lovable-setup-tanstack-ssr commit -m "docs(lovable-setup): document docker/tanstack-ssr/static shapes"
 ```
 
@@ -618,6 +618,6 @@ cd ~/code/cosmic-farmland-feat-lovable-setup-tanstack-ssr && gh pr create --titl
 
 ## Self-review notes
 
-- **Spec coverage:** shape detection (T1), bun-serve shim + start (T2), per-shape build-verify + SSR smoke (T3), build-gated reversible wrapper de-brand + `__root.tsx` (T4), Railway/CLAUDE.md guidance (T5), SKILL.md (T6), fixture verify + idempotency (T7), real-repo transform (T8). All spec sections mapped.
+- **Spec coverage:** shape detection (T1), bun-serve shim + start (T2), per-shape build-verify + SSR smoke (T3), build-gated reversible wrapper de-brand + `__root.tsx` (T4), Railway/CLAUDE.md guidance (T5), command doc (T6), fixture verify + idempotency (T7), real-repo transform (T8). All spec sections mapped.
 - **Type/name consistency:** `SHAPE` value `tanstack-ssr` used identically in all branches; shim file `server-entry.ts`, start `bun server-entry.ts`, build artifact `dist/server/server.js`, client dir `dist/client` consistent across T2/T3/T4/T7/T8.
 - **Risk:** the plain-config template is faithful to wrapper v2.1.1; the build-gate + `.bak` rollback (T4) makes a version mismatch safe (keeps the wrapper, shim still deploys). T4 Step 3 catches it on the fixture before any real run.
