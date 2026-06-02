@@ -43,4 +43,8 @@ depends on the swap succeeding. It also de-brands the head/`<title>`/og strings 
 Set `LOVABLE_SETUP_DEBRAND=1` to auto-confirm the wrapper swap non-interactively
 (useful when an agent runs the script without a TTY, where prompts otherwise auto-skip).
 
+Set `LOVABLE_SETUP_RAILWAY=1` to auto-create the Railway project + deploy in the
+same non-interactive way (uses `railway up --ci`; `railway.json` supplies build/start).
+The GitHub->Railway repo connect for push-to-deploy stays a one-time dashboard/OAuth step.
+
 Tested against shapes: `tanstack-ssr` (dead-77-odyssey).

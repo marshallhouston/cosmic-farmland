@@ -542,12 +542,14 @@ echo ""
 if brew_offer railway railway "deploy to Railway"; then
   if railway status >/dev/null 2>&1; then
     ok "Railway project already linked — skipping create"
-  elif ask "Set up a Railway project?"; then
-    railway init --name "$PROJECT_NAME"
+  elif [ "${LOVABLE_SETUP_RAILWAY:-}" = "1" ] || ask "Set up a Railway project?"; then
+    # </dev/null + --ci so this runs unattended (agent/non-TTY); railway.json
+    # supplies build/start. LOVABLE_SETUP_RAILWAY=1 fires it without a prompt.
+    railway init --name "$PROJECT_NAME" </dev/null
     info "Deploying..."
-    railway up 2>&1 || true
+    railway up --ci </dev/null 2>&1 || true
     info "Generating domain..."
-    railway domain 2>&1 || true
+    railway domain </dev/null 2>&1 || true
     ok "Deployed"
     case "$SHAPE" in
       docker)
