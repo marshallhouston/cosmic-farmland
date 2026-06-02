@@ -317,7 +317,7 @@ if [ ! -f CLAUDE.md ]; then
 - React + TypeScript, Vite, Tailwind CSS + shadcn/ui
 - Bun for package management
 - Origin: Lovable scaffold (de-branded via lovable-setup)
-- Deploy: $([ "$SHAPE" = docker ] && echo "Docker image on Railway" || echo "static SPA on Railway")
+- Deploy: $(case "$SHAPE" in docker) echo "Docker image on Railway";; tanstack-ssr) echo "TanStack Start SSR on Railway (bun server-entry.ts)";; *) echo "static SPA on Railway";; esac)
 
 ## Conventions
 
@@ -513,11 +513,14 @@ if brew_offer railway railway "deploy to Railway"; then
     info "Generating domain..."
     railway domain 2>&1 || true
     ok "Deployed"
-    if [ "$SHAPE" = static ]; then
-      warn "Set Start Command in Railway: Service → Settings → Deploy → 'bun run start'"
-    else
-      ok "Docker deploy — Railway auto-builds the Dockerfile, no start command needed"
-    fi
+    case "$SHAPE" in
+      tanstack-ssr)
+        warn "Set Start Command in Railway: Service → Settings → Deploy → 'bun run start' (runs the SSR shim on \$PORT)" ;;
+      static)
+        warn "Set Start Command in Railway: Service → Settings → Deploy → 'bun run start'" ;;
+      docker)
+        ok "Docker deploy — Railway auto-builds the Dockerfile, no start command needed" ;;
+    esac
   fi
 else
   warn "Skipping Railway -- no railway CLI."
