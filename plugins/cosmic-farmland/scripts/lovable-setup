@@ -61,10 +61,14 @@ brew_offer bun oven-sh/bun/bun "package manager + builds" || fail "bun is requir
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || fail "Not a git repository"
 
 # ── Detect project shape ──────────────────────────────────────────────
-DEPLOY_MODE="static"
-[ -f Dockerfile ] && DEPLOY_MODE="docker"
+# Precedence: docker (Dockerfile) > tanstack-ssr (@tanstack/react-start) > static SPA.
+SHAPE="static"
+[ -f Dockerfile ] && SHAPE="docker"
+if [ "$SHAPE" = static ] && grep -q '"@tanstack/react-start"' package.json 2>/dev/null; then
+  SHAPE="tanstack-ssr"
+fi
 HAS_PY="no"; { [ -f server/requirements.txt ] || [ -f requirements.txt ]; } && HAS_PY="yes"
-info "Deploy shape: ${DEPLOY_MODE}$([ "$HAS_PY" = yes ] && echo " + python backend")"
+info "Project shape: ${SHAPE}$([ "$HAS_PY" = yes ] && echo " + python backend")"
 
 # ── 1. Lockfiles — keep the Bun text lockfile, drop the rest ──────────
 info "Cleaning lockfiles..."
@@ -143,7 +147,7 @@ else
 fi
 
 # ── 6. Start script — static SPA only (Docker builds itself) ──────────
-if [ "$DEPLOY_MODE" = static ]; then
+if [ "$SHAPE" = static ]; then
   info "Checking start script..."
   if ! grep -q '"start"' package.json; then
     # Output dir resolved after build (step 11); default to dist, fixed up later.
@@ -266,7 +270,7 @@ if [ ! -f CLAUDE.md ]; then
 - React + TypeScript, Vite, Tailwind CSS + shadcn/ui
 - Bun for package management
 - Origin: Lovable scaffold (de-branded via lovable-setup)
-- Deploy: $([ "$DEPLOY_MODE" = docker ] && echo "Docker image on Railway" || echo "static SPA on Railway")
+- Deploy: $([ "$SHAPE" = docker ] && echo "Docker image on Railway" || echo "static SPA on Railway")
 
 ## Conventions
 
@@ -311,7 +315,7 @@ fi
 info "Verifying build..."
 bun run build 2>&1 | tail -5 || fail "Build failed — fix errors before deploying"
 OUT="dist"; [ -d dist/client ] && OUT="dist/client"
-if [ "$DEPLOY_MODE" = static ] && [ "$OUT" != dist ]; then
+if [ "$SHAPE" = static ] && [ "$OUT" != dist ]; then
   sed -i '' "s#bunx serve dist #bunx serve $OUT #" package.json 2>/dev/null || true
   ok "Build OK — start script points at $OUT"
 else
@@ -376,7 +380,7 @@ if brew_offer railway railway "deploy to Railway"; then
     info "Generating domain..."
     railway domain 2>&1 || true
     ok "Deployed"
-    if [ "$DEPLOY_MODE" = static ]; then
+    if [ "$SHAPE" = static ]; then
       warn "Set Start Command in Railway: Service → Settings → Deploy → 'bun run start'"
     else
       ok "Docker deploy — Railway auto-builds the Dockerfile, no start command needed"
@@ -390,8 +394,8 @@ fi
 echo ""
 warn "GitHub→Railway auto-deploy is OAuth dashboard-only (CLI can't wire it):"
 echo  "    Railway dashboard → service → Settings → Source → Connect repo + branch main"
-[ "$DEPLOY_MODE" = docker ] && echo "    Keep Root Directory unset so the root Dockerfile builds."
+[ "$SHAPE" = docker ] && echo "    Keep Root Directory unset so the root Dockerfile builds."
 
 echo ""
-echo -e "${GREEN}━━━ Setup complete — $PROJECT_NAME ($DEPLOY_MODE) ━━━${NC}"
+echo -e "${GREEN}━━━ Setup complete — $PROJECT_NAME ($SHAPE) ━━━${NC}"
 echo ""
