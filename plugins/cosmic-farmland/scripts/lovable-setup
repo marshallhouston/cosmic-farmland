@@ -61,10 +61,14 @@ brew_offer bun oven-sh/bun/bun "package manager + builds" || fail "bun is requir
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || fail "Not a git repository"
 
 # ── Detect project shape ──────────────────────────────────────────────
-DEPLOY_MODE="static"
-[ -f Dockerfile ] && DEPLOY_MODE="docker"
+# Precedence: docker (Dockerfile) > tanstack-ssr (@tanstack/react-start) > static SPA.
+SHAPE="static"
+[ -f Dockerfile ] && SHAPE="docker"
+if [ "$SHAPE" = static ] && grep -q '"@tanstack/react-start"' package.json 2>/dev/null; then
+  SHAPE="tanstack-ssr"
+fi
 HAS_PY="no"; { [ -f server/requirements.txt ] || [ -f requirements.txt ]; } && HAS_PY="yes"
-info "Deploy shape: ${DEPLOY_MODE}$([ "$HAS_PY" = yes ] && echo " + python backend")"
+info "Project shape: ${SHAPE}$([ "$HAS_PY" = yes ] && echo " + python backend")"
 
 # ── 1. Lockfiles — keep the Bun text lockfile, drop the rest ──────────
 info "Cleaning lockfiles..."
@@ -89,6 +93,23 @@ info "Writing .railwayignore..."
 } > .railwayignore
 ok ".railwayignore written"
 
+# ── 3b. railway.json — pin build/start so no dashboard step is needed ─
+# Docker shapes start from the Dockerfile CMD; SPA + SSR both `bun run start`.
+if [ "$SHAPE" != docker ] && [ ! -f railway.json ] && [ ! -f railway.toml ]; then
+  cat > railway.json << 'RAILWAY'
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": { "buildCommand": "bun run build" },
+  "deploy": { "startCommand": "bun run start" }
+}
+RAILWAY
+  ok "railway.json written (build + start pinned — no dashboard start-command step)"
+elif [ "$SHAPE" = docker ]; then
+  ok "Docker shape — start comes from the Dockerfile, no railway.json needed"
+else
+  ok "railway.json/.toml already present — left in place"
+fi
+
 # ── 4. De-brand: strip Lovable editor hooks + branding ────────────────
 info "Stripping Lovable branding..."
 STRIPPED=0
@@ -109,8 +130,13 @@ if grep -q '"lovable-tagger"' package.json 2>/dev/null; then
   bun remove lovable-tagger >/dev/null 2>&1 || true; STRIPPED=1
 fi
 if grep -q '@lovable.dev/vite-tanstack-config' package.json 2>/dev/null; then
-  warn "Uses @lovable.dev/vite-tanstack-config — head/meta live in src/routes/__root.tsx."
-  warn "  Replace the lovable config wrapper with plain TanStack Start + Vite by hand (plain TanStack Start + Vite plugins, no lovable wrapper)."
+  info "Detected @lovable.dev wrapper — will attempt a build-gated plain-config swap after install."
+fi
+# SSR head/title/og live in src/routes/__root.tsx, not an HTML file. De-brand the
+# DISPLAY strings only; leave functional code (e.g. lovable-error-reporting imports) intact.
+if [ -f src/routes/__root.tsx ] && grep -qi 'lovable' src/routes/__root.tsx 2>/dev/null; then
+  sed -i '' 's#https://lovable\.dev[^"'"'"']*##g; s#Lovable Generated Project#'"$PROJECT_NAME"'#g; s#Lovable App#'"$PROJECT_NAME"'#g; s#{ name: "author", content: "Lovable" }#{ name: "author", content: "'"$PROJECT_NAME"'" }#g; s#"@Lovable"#"@'"$PROJECT_NAME"'"#g' src/routes/__root.tsx 2>/dev/null || true
+  ok "De-branded src/routes/__root.tsx head/meta (functional code left intact)"
 fi
 # 4c. Lovable title / og:image meta — best-effort, in HTML.
 while IFS= read -r f; do
@@ -142,11 +168,59 @@ else
   ok "Favicon present ($([ -n "$FAV" ] && echo "$FAV" || echo favicon.svg)) — left in place"
 fi
 
-# ── 6. Start script — static SPA only (Docker builds itself) ──────────
-if [ "$DEPLOY_MODE" = static ]; then
+# ── 6. Start script + SSR runtime shim ────────────────────────────────
+if [ "$SHAPE" = tanstack-ssr ]; then
+  info "Writing bun-serve SSR shim (server-entry.ts)..."
+  if [ -f server-entry.ts ]; then
+    ok "server-entry.ts already present — left in place"
+  else
+    cat > server-entry.ts << 'SHIM'
+// server-entry.ts — bun-native prod runtime for TanStack Start SSR (lovable-setup).
+// The build emits dist/server/server.js, a Web-standard { fetch(req, env, ctx) }
+// handler that does NOT listen on a port. This shim wraps it with Bun.serve,
+// serves hashed client assets from dist/client, and listens on $PORT.
+// Start: bun server-entry.ts   (Railway start command: bun run start)
+const ENTRY = (await Bun.file("./dist/server/server.js").exists())
+  ? "./dist/server/server.js"
+  : "./.output/server/index.mjs"; // fallback if a future build emits a nitro layout
+const mod = await import(ENTRY);
+const app = (mod.default ?? mod) as {
+  fetch: (req: Request, env: unknown, ctx: unknown) => Response | Promise<Response>;
+};
+const port = Number(process.env.PORT ?? 3000);
+import { resolve } from "node:path";
+const CLIENT_DIR = resolve("./dist/client");
+Bun.serve({
+  port,
+  idleTimeout: 60,
+  async fetch(req) {
+    const url = new URL(req.url);
+    if (url.pathname !== "/") {
+      // Resolve and confine to dist/client — reject path traversal (../, encoded).
+      const target = resolve(CLIENT_DIR + decodeURIComponent(url.pathname));
+      if (target === CLIENT_DIR || target.startsWith(CLIENT_DIR + "/")) {
+        const file = Bun.file(target);
+        if (await file.exists()) return new Response(file);
+      }
+    }
+    return app.fetch(req, process.env, {});
+  },
+});
+console.log(`SSR listening on :${port}`);
+SHIM
+    ok "server-entry.ts written (bun-serve SSR runtime)"
+  fi
+  if grep -q '"start"' package.json; then
+    ok "Start script already present"
+  else
+    sed -i '' '/"build"/a\
+    "start": "bun server-entry.ts",
+' package.json
+    ok "Added SSR start script (bun server-entry.ts)"
+  fi
+elif [ "$SHAPE" = static ]; then
   info "Checking start script..."
   if ! grep -q '"start"' package.json; then
-    # Output dir resolved after build (step 11); default to dist, fixed up later.
     if grep -q '"preview"' package.json; then
       sed -i '' '/"preview"/a\
     "start": "bunx serve dist -s -l ${PORT:-3000}",
@@ -175,7 +249,11 @@ info "Setting up tests (Vitest)..."
 if grep -q '"vitest"' package.json 2>/dev/null; then
   ok "Vitest already configured"
 else
-  bun add -d vitest @testing-library/react @testing-library/jest-dom @testing-library/user-event jsdom @vitejs/plugin-react >/dev/null 2>&1 || warn "bun add for test deps hit a snag — check manually"
+  bun add -d vitest @testing-library/react @testing-library/jest-dom @testing-library/user-event jsdom >/dev/null 2>&1 || warn "bun add for test deps hit a snag — check manually"
+  # @vitejs/plugin-react: add only if MISSING. tanstack-ssr ships a vite-compatible
+  # version already; `bun add @latest` here would pull plugin-react@6 (needs a newer
+  # vite) and break the build.
+  grep -q '"@vitejs/plugin-react"' package.json || bun add -d @vitejs/plugin-react >/dev/null 2>&1 || true
   grep -q '"test"' package.json || sed -i '' '/"build"/a\
     "test": "vitest run",\
     "test:watch": "vitest",
@@ -258,6 +336,11 @@ fi
 # ── 10. CLAUDE.md scaffold + shared conventions tail ──────────────────
 if [ ! -f CLAUDE.md ]; then
   info "Creating CLAUDE.md..."
+  case "$SHAPE" in
+    docker)       DEPLOY_DESC="Docker image on Railway" ;;
+    tanstack-ssr) DEPLOY_DESC="TanStack Start SSR on Railway (bun server-entry.ts)" ;;
+    *)            DEPLOY_DESC="static SPA on Railway" ;;
+  esac
   cat > CLAUDE.md << CLAUDEMD
 # $PROJECT_NAME
 
@@ -266,7 +349,7 @@ if [ ! -f CLAUDE.md ]; then
 - React + TypeScript, Vite, Tailwind CSS + shadcn/ui
 - Bun for package management
 - Origin: Lovable scaffold (de-branded via lovable-setup)
-- Deploy: $([ "$DEPLOY_MODE" = docker ] && echo "Docker image on Railway" || echo "static SPA on Railway")
+- Deploy: $DEPLOY_DESC
 
 ## Conventions
 
@@ -293,11 +376,11 @@ fi
 if brew_offer tokensave aovestdipaperino/tap/tokensave "code-graph exploration"; then
   if [ -d .tokensave ]; then
     info "tokensave already initialized — syncing..."
-    tokensave sync >/dev/null 2>&1 || true
+    tokensave sync </dev/null >/dev/null 2>&1 || true
     ok "tokensave synced"
   else
     info "Initializing tokensave (code graph + agent integration)..."
-    if tokensave init >/dev/null 2>&1 && tokensave install >/dev/null 2>&1; then
+    if tokensave init </dev/null >/dev/null 2>&1 && tokensave install </dev/null >/dev/null 2>&1; then
       ok "tokensave indexed + agent integration configured"
     else
       warn "tokensave init/install hit a snag — run 'tokensave init' manually"
@@ -307,15 +390,105 @@ else
   warn "Skipping tokensave code-graph index (not installed)."
 fi
 
+# ── 10b. De-brand: replace @lovable.dev wrapper with plain config (gated) ─
+if [ "$SHAPE" = tanstack-ssr ] && grep -q '@lovable.dev/vite-tanstack-config' package.json 2>/dev/null && [ -f vite.config.ts ]; then
+  if [ "${LOVABLE_SETUP_DEBRAND:-}" = "1" ] || ask "Replace @lovable.dev/vite-tanstack-config with plain TanStack Start + Vite config? (build-gated, auto-rollback)"; then
+    info "Swapping wrapper for plain config..."
+    cp vite.config.ts vite.config.ts.bak
+    cat > vite.config.ts << 'PLAINVITE'
+// vite.config.ts — plain TanStack Start + Vite (de-branded from
+// @lovable.dev/vite-tanstack-config). Dropped: componentTagger (Lovable editor hook),
+// dev error-loggers, hmr-gate, dev-server-bridge, sandbox port-pinning, and the
+// nitro cloudflare deploy plugin (skipped outside a Lovable sandbox anyway).
+// Build emits dist/client + dist/server/server.js (a Web fetch handler) — run it
+// with the bun-serve shim (server-entry.ts). VITE_* env vars are auto-exposed by Vite.
+import { defineConfig } from "vite";
+import { tanstackStart } from "@tanstack/react-start/plugin/vite";
+import viteReact from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
+import tsConfigPaths from "vite-tsconfig-paths";
+
+export default defineConfig({
+  server: { host: "::", port: 8080 },
+  resolve: {
+    alias: { "@": `${process.cwd()}/src` },
+    dedupe: [
+      "react",
+      "react-dom",
+      "react/jsx-runtime",
+      "react/jsx-dev-runtime",
+      "@tanstack/react-query",
+      "@tanstack/query-core",
+    ],
+  },
+  plugins: [
+    tailwindcss(),
+    tsConfigPaths({ projects: ["./tsconfig.json"] }),
+    tanstackStart({
+      server: { entry: "server" },
+      importProtection: {
+        behavior: "error",
+        client: { files: ["**/server/**"], specifiers: ["server-only"] },
+      },
+    }),
+    viteReact(),
+  ],
+});
+PLAINVITE
+    # The plain config imports 4 wrapper peer-deps. Lovable already lists them as
+    # direct deps at vite-compatible versions; pin-add only any that are MISSING (so
+    # `bun remove` can't prune them). NEVER `bun add @latest` — that pulls e.g.
+    # @vitejs/plugin-react@6 which needs a newer vite and breaks the build.
+    for dep in @vitejs/plugin-react @tailwindcss/vite vite-tsconfig-paths @tanstack/react-start; do
+      grep -q "\"$dep\"" package.json && continue
+      dv=$(grep '"version"' "node_modules/$dep/package.json" 2>/dev/null | head -1 | sed 's/.*: *"//; s/".*//')
+      [ -n "$dv" ] && bun add -d "$dep@$dv" >/dev/null 2>&1 || true
+    done
+    bun remove @lovable.dev/vite-tanstack-config >/dev/null 2>&1 || true
+    if bun run build >/dev/null 2>&1 && [ -f dist/server/server.js ]; then
+      rm -f vite.config.ts.bak
+      ok "Wrapper replaced with plain config (build verified, emits dist/server/server.js)"
+    else
+      mv vite.config.ts.bak vite.config.ts
+      bun add -d @lovable.dev/vite-tanstack-config >/dev/null 2>&1 || true
+      bun install >/dev/null 2>&1 || true
+      warn "Plain-config build failed — restored @lovable.dev wrapper. Replace by hand for a clean break."
+    fi
+  else
+    ok "Kept @lovable.dev wrapper (shim deploys its output regardless)"
+  fi
+fi
+
 # ── 11. Build + test verification (+ fix static start dir) ────────────
 info "Verifying build..."
 bun run build 2>&1 | tail -5 || fail "Build failed — fix errors before deploying"
-OUT="dist"; [ -d dist/client ] && OUT="dist/client"
-if [ "$DEPLOY_MODE" = static ] && [ "$OUT" != dist ]; then
-  sed -i '' "s#bunx serve dist #bunx serve $OUT #" package.json 2>/dev/null || true
-  ok "Build OK — start script points at $OUT"
+if [ "$SHAPE" = tanstack-ssr ]; then
+  [ -f dist/server/server.js ] || fail "SSR build did not emit dist/server/server.js — shim has nothing to wrap"
+  info "Smoke-testing SSR shim..."
+  PORT=8799 bun server-entry.ts >/tmp/lovable-setup-shim.log 2>&1 & SHIM_PID=$!
+  SHIM_OK=
+  for _ in $(seq 1 20); do
+    if curl -fsS http://localhost:8799/ >/dev/null 2>&1; then SHIM_OK=1; break; fi
+    sleep 0.5
+  done
+  if [ -n "$SHIM_OK" ]; then
+    ok "Build OK — SSR shim boots + serves / (200)"
+  else
+    kill "$SHIM_PID" 2>/dev/null || true
+    cat /tmp/lovable-setup-shim.log
+    fail "SSR shim failed its smoke check — see log above"
+  fi
+  kill "$SHIM_PID" 2>/dev/null || true
+elif [ "$SHAPE" = static ]; then
+  OUT="dist"; [ -d dist/client ] && OUT="dist/client"
+  if [ "$OUT" != dist ]; then
+    sed -i '' "s#bunx serve dist #bunx serve $OUT #" package.json 2>/dev/null || true
+    ok "Build OK — start script points at $OUT"
+  else
+    ok "Build OK (output: $OUT)"
+  fi
 else
-  ok "Build OK (output: $OUT)"
+  ok "Build OK (Docker — Railway builds the image)"
 fi
 info "Running tests..."
 bun run test 2>&1 | tail -8 || fail "Tests failed — fix before continuing"
@@ -376,11 +549,12 @@ if brew_offer railway railway "deploy to Railway"; then
     info "Generating domain..."
     railway domain 2>&1 || true
     ok "Deployed"
-    if [ "$DEPLOY_MODE" = static ]; then
-      warn "Set Start Command in Railway: Service → Settings → Deploy → 'bun run start'"
-    else
-      ok "Docker deploy — Railway auto-builds the Dockerfile, no start command needed"
-    fi
+    case "$SHAPE" in
+      docker)
+        ok "Docker deploy — Railway auto-builds the Dockerfile, no start command needed" ;;
+      *)
+        ok "Start command pinned via railway.json (bun run start) — no dashboard step needed" ;;
+    esac
   fi
 else
   warn "Skipping Railway -- no railway CLI."
@@ -390,8 +564,8 @@ fi
 echo ""
 warn "GitHub→Railway auto-deploy is OAuth dashboard-only (CLI can't wire it):"
 echo  "    Railway dashboard → service → Settings → Source → Connect repo + branch main"
-[ "$DEPLOY_MODE" = docker ] && echo "    Keep Root Directory unset so the root Dockerfile builds."
+[ "$SHAPE" = docker ] && echo "    Keep Root Directory unset so the root Dockerfile builds."
 
 echo ""
-echo -e "${GREEN}━━━ Setup complete — $PROJECT_NAME ($DEPLOY_MODE) ━━━${NC}"
+echo -e "${GREEN}━━━ Setup complete — $PROJECT_NAME ($SHAPE) ━━━${NC}"
 echo ""
