@@ -562,11 +562,20 @@ else
   warn "Skipping Railway -- no railway CLI."
 fi
 
-# ── 15. The one manual step: GitHub → Railway auto-deploy ─────────────
+# ── 15. Manual finish: GitHub → Railway push-to-deploy + custom domain ─
+# OAuth dashboard-only — no CLI can wire these. Laid out so every run ends
+# with the exact clicks.
 echo ""
-warn "GitHub→Railway auto-deploy is OAuth dashboard-only (CLI can't wire it):"
-echo  "    Railway dashboard → service → Settings → Source → Connect repo + branch main"
-[ "$SHAPE" = docker ] && echo "    Keep Root Directory unset so the root Dockerfile builds."
+warn "Manual steps (Railway dashboard / OAuth — can't be scripted):"
+echo  "  Push-to-deploy (GitHub → Railway):"
+echo  "    1. railway.com → your project → the service → Settings → Source → Connect Repo"
+echo  "    2. authorize the Railway GitHub App, then pick the repo + branch main"
+[ "$SHAPE" = docker ] && echo "    3. keep Root Directory unset so the root Dockerfile builds" || echo "    3. leave Root Directory empty — railway.json supplies build + start"
+echo  "  Custom domain (optional, e.g. app.yourdomain.com):"
+echo  "    1. service → Settings → Networking → Custom Domain → enter the subdomain"
+echo  "    2. add Railway'''s shown CNAME target to your DNS as a CNAME for that subdomain"
+echo  "    3. Cloudflare: set the record proxied (orange) + SSL/TLS mode Full"
+echo  "    4. Railway auto-issues the cert once DNS resolves (status -> Active)"
 
 echo ""
 echo -e "${GREEN}━━━ Setup complete — $PROJECT_NAME ($SHAPE) ━━━${NC}"
