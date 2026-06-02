@@ -40,4 +40,7 @@ config. The swap is **build-gated**: if the rebuild fails it auto-restores the w
 depends on the swap succeeding. It also de-brands the head/`<title>`/og strings in
 `src/routes/__root.tsx` (leaving functional imports like `lovable-error-reporting` intact).
 
+Set `LOVABLE_SETUP_DEBRAND=1` to auto-confirm the wrapper swap non-interactively
+(useful when an agent runs the script without a TTY, where prompts otherwise auto-skip).
+
 Tested against shapes: `tanstack-ssr` (dead-77-odyssey).

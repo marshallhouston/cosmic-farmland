@@ -226,7 +226,11 @@ info "Setting up tests (Vitest)..."
 if grep -q '"vitest"' package.json 2>/dev/null; then
   ok "Vitest already configured"
 else
-  bun add -d vitest @testing-library/react @testing-library/jest-dom @testing-library/user-event jsdom @vitejs/plugin-react >/dev/null 2>&1 || warn "bun add for test deps hit a snag — check manually"
+  bun add -d vitest @testing-library/react @testing-library/jest-dom @testing-library/user-event jsdom >/dev/null 2>&1 || warn "bun add for test deps hit a snag — check manually"
+  # @vitejs/plugin-react: add only if MISSING. tanstack-ssr ships a vite-compatible
+  # version already; `bun add @latest` here would pull plugin-react@6 (needs a newer
+  # vite) and break the build.
+  grep -q '"@vitejs/plugin-react"' package.json || bun add -d @vitejs/plugin-react >/dev/null 2>&1 || true
   grep -q '"test"' package.json || sed -i '' '/"build"/a\
     "test": "vitest run",\
     "test:watch": "vitest",
@@ -309,6 +313,11 @@ fi
 # ── 10. CLAUDE.md scaffold + shared conventions tail ──────────────────
 if [ ! -f CLAUDE.md ]; then
   info "Creating CLAUDE.md..."
+  case "$SHAPE" in
+    docker)       DEPLOY_DESC="Docker image on Railway" ;;
+    tanstack-ssr) DEPLOY_DESC="TanStack Start SSR on Railway (bun server-entry.ts)" ;;
+    *)            DEPLOY_DESC="static SPA on Railway" ;;
+  esac
   cat > CLAUDE.md << CLAUDEMD
 # $PROJECT_NAME
 
@@ -317,7 +326,7 @@ if [ ! -f CLAUDE.md ]; then
 - React + TypeScript, Vite, Tailwind CSS + shadcn/ui
 - Bun for package management
 - Origin: Lovable scaffold (de-branded via lovable-setup)
-- Deploy: $(case "$SHAPE" in docker) echo "Docker image on Railway";; tanstack-ssr) echo "TanStack Start SSR on Railway (bun server-entry.ts)";; *) echo "static SPA on Railway";; esac)
+- Deploy: $DEPLOY_DESC
 
 ## Conventions
 
@@ -360,7 +369,7 @@ fi
 
 # ── 10b. De-brand: replace @lovable.dev wrapper with plain config (gated) ─
 if [ "$SHAPE" = tanstack-ssr ] && grep -q '@lovable.dev/vite-tanstack-config' package.json 2>/dev/null && [ -f vite.config.ts ]; then
-  if ask "Replace @lovable.dev/vite-tanstack-config with plain TanStack Start + Vite config? (build-gated, auto-rollback)"; then
+  if [ "${LOVABLE_SETUP_DEBRAND:-}" = "1" ] || ask "Replace @lovable.dev/vite-tanstack-config with plain TanStack Start + Vite config? (build-gated, auto-rollback)"; then
     info "Swapping wrapper for plain config..."
     cp vite.config.ts vite.config.ts.bak
     cat > vite.config.ts << 'PLAINVITE'
