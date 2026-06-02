@@ -572,9 +572,10 @@ echo  "    1. railway.com → your project → the service → Settings → Sour
 echo  "    2. authorize the Railway GitHub App, then pick the repo + branch main"
 [ "$SHAPE" = docker ] && echo "    3. keep Root Directory unset so the root Dockerfile builds" || echo "    3. leave Root Directory empty — railway.json supplies build + start"
 echo  "  Custom domain (optional, e.g. app.yourdomain.com):"
-echo  "    1. service → Settings → Networking → Custom Domain → enter the subdomain"
-echo  "    2. add Railway'''s shown CNAME target to your DNS as a CNAME for that subdomain"
-echo  "    3. Cloudflare: set the record proxied (orange) + SSL/TLS mode Full"
+echo  "    1. service -> Settings -> Networking -> Custom Domain -> enter the subdomain"
+echo  "    2. target port: enter your \$PORT (8080 on Railway = the port the app serves on)"
+echo  "    3. DNS on Cloudflare? use Railway's one-click \"Connect to Cloudflare\" and you are done."
+echo  "       else add the shown CNAME target to DNS yourself (Cloudflare: proxied/orange + SSL Full)"
 echo  "    4. Railway auto-issues the cert once DNS resolves (status -> Active)"
 
 echo ""
