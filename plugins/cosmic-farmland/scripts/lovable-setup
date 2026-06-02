@@ -356,12 +356,29 @@ fi
 # ── 11. Build + test verification (+ fix static start dir) ────────────
 info "Verifying build..."
 bun run build 2>&1 | tail -5 || fail "Build failed — fix errors before deploying"
-OUT="dist"; [ -d dist/client ] && OUT="dist/client"
-if [ "$SHAPE" = static ] && [ "$OUT" != dist ]; then
-  sed -i '' "s#bunx serve dist #bunx serve $OUT #" package.json 2>/dev/null || true
-  ok "Build OK — start script points at $OUT"
+if [ "$SHAPE" = tanstack-ssr ]; then
+  [ -f dist/server/server.js ] || fail "SSR build did not emit dist/server/server.js — shim has nothing to wrap"
+  info "Smoke-testing SSR shim..."
+  PORT=8799 bun server-entry.ts >/tmp/lovable-setup-shim.log 2>&1 & SHIM_PID=$!
+  sleep 2
+  if curl -fsS http://localhost:8799/ >/dev/null 2>&1; then
+    ok "Build OK — SSR shim boots + serves / (200)"
+  else
+    kill "$SHIM_PID" 2>/dev/null || true
+    cat /tmp/lovable-setup-shim.log
+    fail "SSR shim failed its smoke check — see log above"
+  fi
+  kill "$SHIM_PID" 2>/dev/null || true
+elif [ "$SHAPE" = static ]; then
+  OUT="dist"; [ -d dist/client ] && OUT="dist/client"
+  if [ "$OUT" != dist ]; then
+    sed -i '' "s#bunx serve dist #bunx serve $OUT #" package.json 2>/dev/null || true
+    ok "Build OK — start script points at $OUT"
+  else
+    ok "Build OK (output: $OUT)"
+  fi
 else
-  ok "Build OK (output: $OUT)"
+  ok "Build OK (Docker — Railway builds the image)"
 fi
 info "Running tests..."
 bun run test 2>&1 | tail -8 || fail "Tests failed — fix before continuing"
