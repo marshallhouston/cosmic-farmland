@@ -146,11 +146,53 @@ else
   ok "Favicon present ($([ -n "$FAV" ] && echo "$FAV" || echo favicon.svg)) — left in place"
 fi
 
-# ── 6. Start script — static SPA only (Docker builds itself) ──────────
-if [ "$SHAPE" = static ]; then
+# ── 6. Start script + SSR runtime shim ────────────────────────────────
+if [ "$SHAPE" = tanstack-ssr ]; then
+  info "Writing bun-serve SSR shim (server-entry.ts)..."
+  if [ -f server-entry.ts ]; then
+    ok "server-entry.ts already present — left in place"
+  else
+    cat > server-entry.ts << 'SHIM'
+// server-entry.ts — bun-native prod runtime for TanStack Start SSR (lovable-setup).
+// The build emits dist/server/server.js, a Web-standard { fetch(req, env, ctx) }
+// handler that does NOT listen on a port. This shim wraps it with Bun.serve,
+// serves hashed client assets from dist/client, and listens on $PORT.
+// Start: bun server-entry.ts   (Railway start command: bun run start)
+const ENTRY = (await Bun.file("./dist/server/server.js").exists())
+  ? "./dist/server/server.js"
+  : "./.output/server/index.mjs"; // fallback if a future build emits a nitro layout
+const mod = await import(ENTRY);
+const app = (mod.default ?? mod) as {
+  fetch: (req: Request, env: unknown, ctx: unknown) => Response | Promise<Response>;
+};
+const port = Number(process.env.PORT ?? 3000);
+Bun.serve({
+  port,
+  idleTimeout: 60,
+  async fetch(req) {
+    const url = new URL(req.url);
+    if (url.pathname !== "/") {
+      const file = Bun.file(`./dist/client${url.pathname}`);
+      if (await file.exists()) return new Response(file);
+    }
+    return app.fetch(req, process.env, {});
+  },
+});
+console.log(`SSR listening on :${port}`);
+SHIM
+    ok "server-entry.ts written (bun-serve SSR runtime)"
+  fi
+  if grep -q '"start"' package.json; then
+    ok "Start script already present"
+  else
+    sed -i '' '/"build"/a\
+    "start": "bun server-entry.ts",
+' package.json
+    ok "Added SSR start script (bun server-entry.ts)"
+  fi
+elif [ "$SHAPE" = static ]; then
   info "Checking start script..."
   if ! grep -q '"start"' package.json; then
-    # Output dir resolved after build (step 11); default to dist, fixed up later.
     if grep -q '"preview"' package.json; then
       sed -i '' '/"preview"/a\
     "start": "bunx serve dist -s -l ${PORT:-3000}",
