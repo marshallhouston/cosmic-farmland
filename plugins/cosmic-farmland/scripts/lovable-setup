@@ -113,8 +113,13 @@ if grep -q '"lovable-tagger"' package.json 2>/dev/null; then
   bun remove lovable-tagger >/dev/null 2>&1 || true; STRIPPED=1
 fi
 if grep -q '@lovable.dev/vite-tanstack-config' package.json 2>/dev/null; then
-  warn "Uses @lovable.dev/vite-tanstack-config — head/meta live in src/routes/__root.tsx."
-  warn "  Replace the lovable config wrapper with plain TanStack Start + Vite by hand (plain TanStack Start + Vite plugins, no lovable wrapper)."
+  info "Detected @lovable.dev wrapper — will attempt a build-gated plain-config swap after install."
+fi
+# SSR head/title/og live in src/routes/__root.tsx, not an HTML file. De-brand the
+# DISPLAY strings only; leave functional code (e.g. lovable-error-reporting imports) intact.
+if [ -f src/routes/__root.tsx ]; then
+  sed -i '' 's#https://lovable\.dev[^"'"'"']*##g; s#Lovable Generated Project#'"$PROJECT_NAME"'#g; s#Lovable App#'"$PROJECT_NAME"'#g; s#{ name: "author", content: "Lovable" }#{ name: "author", content: "'"$PROJECT_NAME"'" }#g; s#"@Lovable"#"@'"$PROJECT_NAME"'"#g' src/routes/__root.tsx 2>/dev/null || true
+  ok "De-branded src/routes/__root.tsx head/meta (functional code left intact)"
 fi
 # 4c. Lovable title / og:image meta — best-effort, in HTML.
 while IFS= read -r f; do
@@ -351,6 +356,75 @@ if brew_offer tokensave aovestdipaperino/tap/tokensave "code-graph exploration";
   fi
 else
   warn "Skipping tokensave code-graph index (not installed)."
+fi
+
+# ── 10b. De-brand: replace @lovable.dev wrapper with plain config (gated) ─
+if [ "$SHAPE" = tanstack-ssr ] && grep -q '@lovable.dev/vite-tanstack-config' package.json 2>/dev/null && [ -f vite.config.ts ]; then
+  if ask "Replace @lovable.dev/vite-tanstack-config with plain TanStack Start + Vite config? (build-gated, auto-rollback)"; then
+    info "Swapping wrapper for plain config..."
+    cp vite.config.ts vite.config.ts.bak
+    cat > vite.config.ts << 'PLAINVITE'
+// vite.config.ts — plain TanStack Start + Vite (de-branded from
+// @lovable.dev/vite-tanstack-config). Dropped: componentTagger (Lovable editor hook),
+// dev error-loggers, hmr-gate, dev-server-bridge, sandbox port-pinning, and the
+// nitro cloudflare deploy plugin (skipped outside a Lovable sandbox anyway).
+// Build emits dist/client + dist/server/server.js (a Web fetch handler) — run it
+// with the bun-serve shim (server-entry.ts). VITE_* env vars are auto-exposed by Vite.
+import { defineConfig } from "vite";
+import { tanstackStart } from "@tanstack/react-start/plugin/vite";
+import viteReact from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
+import tsConfigPaths from "vite-tsconfig-paths";
+
+export default defineConfig({
+  server: { host: "::", port: 8080 },
+  resolve: {
+    alias: { "@": `${process.cwd()}/src` },
+    dedupe: [
+      "react",
+      "react-dom",
+      "react/jsx-runtime",
+      "react/jsx-dev-runtime",
+      "@tanstack/react-query",
+      "@tanstack/query-core",
+    ],
+  },
+  plugins: [
+    tailwindcss(),
+    tsConfigPaths({ projects: ["./tsconfig.json"] }),
+    tanstackStart({
+      server: { entry: "server" },
+      importProtection: {
+        behavior: "error",
+        client: { files: ["**/server/**"], specifiers: ["server-only"] },
+      },
+    }),
+    viteReact(),
+  ],
+});
+PLAINVITE
+    # The plain config imports 4 wrapper peer-deps. Lovable already lists them as
+    # direct deps at vite-compatible versions; pin-add only any that are MISSING (so
+    # `bun remove` can't prune them). NEVER `bun add @latest` — that pulls e.g.
+    # @vitejs/plugin-react@6 which needs a newer vite and breaks the build.
+    for dep in @vitejs/plugin-react @tailwindcss/vite vite-tsconfig-paths @tanstack/react-start; do
+      grep -q "\"$dep\"" package.json && continue
+      dv=$(grep '"version"' "node_modules/$dep/package.json" 2>/dev/null | head -1 | sed 's/.*: *"//; s/".*//')
+      [ -n "$dv" ] && bun add -d "$dep@$dv" >/dev/null 2>&1 || true
+    done
+    bun remove @lovable.dev/vite-tanstack-config >/dev/null 2>&1 || true
+    if bun run build >/dev/null 2>&1 && [ -f dist/server/server.js ]; then
+      rm -f vite.config.ts.bak
+      ok "Wrapper replaced with plain config (build verified, emits dist/server/server.js)"
+    else
+      mv vite.config.ts.bak vite.config.ts
+      bun add -d @lovable.dev/vite-tanstack-config >/dev/null 2>&1 || true
+      bun install >/dev/null 2>&1 || true
+      warn "Plain-config build failed — restored @lovable.dev wrapper. Replace by hand for a clean break."
+    fi
+  else
+    ok "Kept @lovable.dev wrapper (shim deploys its output regardless)"
+  fi
 fi
 
 # ── 11. Build + test verification (+ fix static start dir) ────────────
