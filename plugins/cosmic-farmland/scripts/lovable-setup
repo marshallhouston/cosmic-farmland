@@ -93,6 +93,23 @@ info "Writing .railwayignore..."
 } > .railwayignore
 ok ".railwayignore written"
 
+# ── 3b. railway.json — pin build/start so no dashboard step is needed ─
+# Docker shapes start from the Dockerfile CMD; SPA + SSR both `bun run start`.
+if [ "$SHAPE" != docker ] && [ ! -f railway.json ] && [ ! -f railway.toml ]; then
+  cat > railway.json << 'RAILWAY'
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": { "buildCommand": "bun run build" },
+  "deploy": { "startCommand": "bun run start" }
+}
+RAILWAY
+  ok "railway.json written (build + start pinned — no dashboard start-command step)"
+elif [ "$SHAPE" = docker ]; then
+  ok "Docker shape — start comes from the Dockerfile, no railway.json needed"
+else
+  ok "railway.json/.toml already present — left in place"
+fi
+
 # ── 4. De-brand: strip Lovable editor hooks + branding ────────────────
 info "Stripping Lovable branding..."
 STRIPPED=0
@@ -117,7 +134,7 @@ if grep -q '@lovable.dev/vite-tanstack-config' package.json 2>/dev/null; then
 fi
 # SSR head/title/og live in src/routes/__root.tsx, not an HTML file. De-brand the
 # DISPLAY strings only; leave functional code (e.g. lovable-error-reporting imports) intact.
-if [ -f src/routes/__root.tsx ]; then
+if [ -f src/routes/__root.tsx ] && grep -qi 'lovable' src/routes/__root.tsx 2>/dev/null; then
   sed -i '' 's#https://lovable\.dev[^"'"'"']*##g; s#Lovable Generated Project#'"$PROJECT_NAME"'#g; s#Lovable App#'"$PROJECT_NAME"'#g; s#{ name: "author", content: "Lovable" }#{ name: "author", content: "'"$PROJECT_NAME"'" }#g; s#"@Lovable"#"@'"$PROJECT_NAME"'"#g' src/routes/__root.tsx 2>/dev/null || true
   ok "De-branded src/routes/__root.tsx head/meta (functional code left intact)"
 fi
@@ -171,14 +188,20 @@ const app = (mod.default ?? mod) as {
   fetch: (req: Request, env: unknown, ctx: unknown) => Response | Promise<Response>;
 };
 const port = Number(process.env.PORT ?? 3000);
+import { resolve } from "node:path";
+const CLIENT_DIR = resolve("./dist/client");
 Bun.serve({
   port,
   idleTimeout: 60,
   async fetch(req) {
     const url = new URL(req.url);
     if (url.pathname !== "/") {
-      const file = Bun.file(`./dist/client${url.pathname}`);
-      if (await file.exists()) return new Response(file);
+      // Resolve and confine to dist/client — reject path traversal (../, encoded).
+      const target = resolve(CLIENT_DIR + decodeURIComponent(url.pathname));
+      if (target === CLIENT_DIR || target.startsWith(CLIENT_DIR + "/")) {
+        const file = Bun.file(target);
+        if (await file.exists()) return new Response(file);
+      }
     }
     return app.fetch(req, process.env, {});
   },
@@ -353,11 +376,11 @@ fi
 if brew_offer tokensave aovestdipaperino/tap/tokensave "code-graph exploration"; then
   if [ -d .tokensave ]; then
     info "tokensave already initialized — syncing..."
-    tokensave sync >/dev/null 2>&1 || true
+    tokensave sync </dev/null >/dev/null 2>&1 || true
     ok "tokensave synced"
   else
     info "Initializing tokensave (code graph + agent integration)..."
-    if tokensave init >/dev/null 2>&1 && tokensave install >/dev/null 2>&1; then
+    if tokensave init </dev/null >/dev/null 2>&1 && tokensave install </dev/null >/dev/null 2>&1; then
       ok "tokensave indexed + agent integration configured"
     else
       warn "tokensave init/install hit a snag — run 'tokensave init' manually"
@@ -443,8 +466,12 @@ if [ "$SHAPE" = tanstack-ssr ]; then
   [ -f dist/server/server.js ] || fail "SSR build did not emit dist/server/server.js — shim has nothing to wrap"
   info "Smoke-testing SSR shim..."
   PORT=8799 bun server-entry.ts >/tmp/lovable-setup-shim.log 2>&1 & SHIM_PID=$!
-  sleep 2
-  if curl -fsS http://localhost:8799/ >/dev/null 2>&1; then
+  SHIM_OK=
+  for _ in $(seq 1 20); do
+    if curl -fsS http://localhost:8799/ >/dev/null 2>&1; then SHIM_OK=1; break; fi
+    sleep 0.5
+  done
+  if [ -n "$SHIM_OK" ]; then
     ok "Build OK — SSR shim boots + serves / (200)"
   else
     kill "$SHIM_PID" 2>/dev/null || true
@@ -523,12 +550,10 @@ if brew_offer railway railway "deploy to Railway"; then
     railway domain 2>&1 || true
     ok "Deployed"
     case "$SHAPE" in
-      tanstack-ssr)
-        warn "Set Start Command in Railway: Service → Settings → Deploy → 'bun run start' (runs the SSR shim on \$PORT)" ;;
-      static)
-        warn "Set Start Command in Railway: Service → Settings → Deploy → 'bun run start'" ;;
       docker)
         ok "Docker deploy — Railway auto-builds the Dockerfile, no start command needed" ;;
+      *)
+        ok "Start command pinned via railway.json (bun run start) — no dashboard step needed" ;;
     esac
   fi
 else
