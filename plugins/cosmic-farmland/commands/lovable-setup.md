@@ -1,5 +1,5 @@
 ---
-description: Take a freshly-exported Lovable app all the way to marshall's dev setup — de-brand, deps, lint, real tests, design.html, deploy scaffolding.
+description: Take a freshly-exported Lovable app all the way to marshall's dev setup — de-brand, deps, lint, real tests, design.html, favicon + social link preview, deploy scaffolding.
 argument-hint: "[project-dir] (default: current dir)"
 ---
 
@@ -62,7 +62,7 @@ Tested against shapes: `tanstack-ssr` (dead-77-odyssey).
 
 ## Phase B — judgment (you, after the script succeeds)
 
-The script handles everything deterministic. These two steps need to read the
+The script handles everything deterministic. These steps need to read the
 actual app, so you do them — in the project dir, committed as a follow-up.
 
 ### 1. Real component tests
@@ -92,7 +92,33 @@ for the app's visual language, built by reading the *actual* styles (not invente
   nav) using the project's *actual* class names so it mirrors the real look.
 - Fully self-contained: inline CSS + fonts, no build step — opens straight in a browser.
 
-### 3. Commit the follow-up
+### 3. Brand assets — favicon + link preview
 
-Commit Phase B (tests + `design.html`) on the setup branch with a clear message.
-If the script already pushed, push the follow-up too.
+Make the app presentable out of the box: a real favicon, and a rich preview when
+the URL is shared via text / Slack / social. Reuse the design system from step 2
+(accent color, fonts, app name).
+
+**Favicon** — replace the setup placeholder (`public/favicon.svg`):
+
+- Generate a simple branded SVG favicon — the app's initial (or a minimal mark) on
+  the accent color, using the design-system palette. Scalable, no raster needed.
+
+**Social link preview (Open Graph + Twitter card):**
+
+- Build `public/og-image.png` at **1200×630**: author a styled HTML card (app name +
+  tagline, design-system colors/fonts), then render it to PNG with a headless
+  screenshot (the `agent-browser` skill, or any headless browser). Raster is required —
+  iMessage / Slack / Twitter don't unfurl SVG. Keep the source HTML so the card is
+  regenerable.
+- Wire the head meta (in `index.html` for plain-vite, or the route `head()` in
+  `src/routes/__root.tsx` / `index.tsx` for TanStack Start):
+  `og:title`, `og:description`, `og:type=website`, `og:image` (+ `:width`/`:height`),
+  `og:url` (placeholder for the deploy domain), `twitter:card=summary_large_image`,
+  `twitter:image`. Reuse the existing title / description if already present.
+- Verify: open `public/og-image.png` to confirm it renders, and check the meta is
+  well-formed.
+
+### 4. Commit the follow-up
+
+Commit Phase B (tests + `design.html` + brand assets) on the setup branch with a clear
+message. If the script already pushed, push the follow-up too.
