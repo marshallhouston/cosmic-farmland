@@ -322,16 +322,30 @@ else
   ok "core.hooksPath already .githooks"
 fi
 
-# ── 9. Outdated report + optional in-range update ─────────────────────
+# ── 9. Outdated report + automatic in-range update ────────────────────
+# In-range bumps are non-destructive and the build+test gate (step 11) catches
+# any breakage, so apply them unattended. Majors stay manual — they break APIs.
 info "Checking for outdated dependencies..."
 bun outdated 2>&1 || true
-if ask "Update dependencies within semver ranges (bun update)?"; then
-  bun update 2>&1 | tail -5
-  ok "Dependencies updated (in-range)."
-  warn "Major bumps NOT applied. For those: bun update --latest (review breaking changes first)."
-else
-  ok "Skipped update — report only"
+info "Applying in-range updates (bun update)..."
+bun update 2>&1 | tail -5
+ok "Dependencies updated (in-range)."
+warn "Major bumps NOT applied (intentional). For those: bun update --latest (review breaking changes first)."
+
+# ── 9b. Format + lint-fix — Lovable ships unformatted source ──────────
+# Normalize the whole scaffold once so the first real diff isn't drowned in
+# prettier noise. Best-effort + non-fatal: lint isn't a deploy gate.
+info "Formatting + lint-fixing the scaffold..."
+FMT_DONE=0
+if grep -q '"format"' package.json 2>/dev/null; then
+  bun run format >/dev/null 2>&1 && FMT_DONE=1 || warn "  'format' script errored — run it manually"
+elif bunx prettier --version >/dev/null 2>&1; then
+  bunx prettier --write . >/dev/null 2>&1 && FMT_DONE=1 || warn "  prettier --write errored — check manually"
 fi
+if grep -q '"eslint"' package.json 2>/dev/null; then
+  bunx eslint . --fix >/dev/null 2>&1 || true   # auto-fixable rules only; leftovers are fine
+fi
+[ "$FMT_DONE" = 1 ] && ok "Scaffold formatted + lint-fixed" || ok "No formatter found — left as-is (add prettier to enable)"
 
 # ── 10. CLAUDE.md scaffold + shared conventions tail ──────────────────
 if [ ! -f CLAUDE.md ]; then
