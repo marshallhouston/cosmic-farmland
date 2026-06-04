@@ -92,6 +92,11 @@ def strip_safe_zones(text: str) -> str:
     text = re.sub(r"```[\s\S]*?```", "", text)
     # Drop inline code spans.
     text = re.sub(r"`[^`\n]*`", "", text)
+    # Drop quoted spans (straight + curly double quotes). Quoting is citation --
+    # UI copy ("4 plans, 3-16 days each"), a measured value ("ran in 70s"), or a
+    # spec excerpt -- not a forward-looking estimate. Mirrors the code-span rule.
+    text = re.sub(r"\"[^\"\n]{0,120}\"", "", text)
+    text = re.sub(r"[“][^“”\n]{0,120}[”]", "", text)
     # Drop quoted reply / blockquote lines.
     text = re.sub(r"(?m)^\s*>.*$", "", text)
     return text
@@ -110,6 +115,22 @@ CONTEXT_WHITELIST = [
     "elapsed",        # "elapsed 256 ms"
     "interval",       # SQL "INTERVAL 7 DAY"
     "window",         # "7d window"
+    # Measurements of something that already happened -- not a prediction.
+    # Keep these DIRECTIONAL (verb/preposition), not bare nouns: bare "build"
+    # would also whitelist the forward estimate "3 days to build".
+    "took",           # "the build took 3 min"
+    "ran in",         # "ran in 70s"
+    "ran for",
+    "completed in",
+    "finished in",
+    "deployed in",    # "deployed in 70s"
+    "deploy in",      # "deploy in 70s"
+    "booted in",      # "booted in 4s"
+    # Code / config constants referenced by value, not estimated.
+    "dwell",          # "20s dwell gate" -- READ_DWELL_MS constant
+    "timeout",        # "30s timeout"
+    "constant",       # "the 20s constant"
+    "_ms",            # "READ_DWELL_MS = 20s"
 ]
 
 
