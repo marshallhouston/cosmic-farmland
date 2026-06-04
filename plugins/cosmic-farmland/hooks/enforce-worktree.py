@@ -119,20 +119,27 @@ def main():
         reason = (
             header
             + f"Primary has uncommitted changes:\n{listed}{more}\n\n"
-            + "Carry them into a fresh worktree -- run verbatim:\n"
+            + "Carry them into a fresh managed worktree -- run verbatim:\n"
             + "  1) git -C " + cwd + " stash push -u -m _wt_carry\n"
-            + f"  2) git -C {cwd} worktree add {suggested_path} -b {branch}\n"
-            + f"  3) EnterWorktree path={suggested_path}\n"
-            + f"  4) git -C {suggested_path} stash pop\n"
-            + "Then commit + push from the worktree as usual."
+            + f"  2) EnterWorktree name={slug}\n"
+            + "  3) git stash pop   (cwd is now the worktree; the stash is "
+            + "shared across worktrees of the same repo)\n"
+            + "Then commit + push from the worktree as usual.\n"
+            + "Do NOT `git worktree add` an external path -- EnterWorktree only "
+            + "manages .claude/worktrees/ and Write/Edit are path-guarded to cwd."
             + bypass
         )
     else:
         reason = (
             header
-            + "Use instead:\n"
-            + f"  git worktree add {suggested_path} -b {branch}\n"
-            + f"Then EnterWorktree path={suggested_path} and run your work there."
+            + "Use instead (managed worktree -- Write/Edit work immediately):\n"
+            + f"  EnterWorktree name={slug}\n"
+            + "This creates .claude/worktrees/" + slug + " on a fresh branch from "
+            + "origin/<default> and switches the session into it.\n"
+            + "Do NOT `git worktree add` an external path (e.g. "
+            + f"{suggested_path}): EnterWorktree only manages worktrees under "
+            + ".claude/worktrees/ and rejects external paths, and Write/Edit are "
+            + "path-guarded to the session cwd -- so the external route dead-ends."
             + bypass
         )
 
