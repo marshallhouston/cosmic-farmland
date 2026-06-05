@@ -17,6 +17,10 @@ set -uo pipefail
 PR="${1:?usage: ship-verify-deploy.sh <pr> <service> [health-url]}"
 SERVICE="${2:?service name required}"
 HEALTH_URL="${3:-}"
+# Prod env name. Defaults to "production" (Railway's default). Without an
+# explicit env, `deployment list` uses the *linked* env -- which after a
+# /ship run may be a preview env, silently probing the wrong deploys.
+ENVIRONMENT="${4:-production}"
 
 [ -f railway.json ] || { echo "no railway.json -- skipping prod-verify"; exit 0; }
 
@@ -40,10 +44,17 @@ else
   rw() { _to railway "$@"; }
 fi
 
-# Auth check via stdout grep, NOT exit code: project tokens make `railway status`
-# exit non-zero even when it prints a valid Project/Environment/Service block.
-if ! rw status 2>&1 | grep -q '^Project:'; then
-  echo "Railway CLI not authenticated. Either:"
+# Auth + capability check via the REAL command the poll uses (--json), NOT
+# `railway status`. Two reasons status is the wrong proxy: (1) project tokens
+# make it exit non-zero even when valid; (2) on projects with many environments
+# the CLI decode-errors on status ("expected value at line 1 column 1") while
+# `deployment list` still works -- preach-hub (21 PR-preview envs) hit this and
+# false-skipped a live deploy. --json output is immune to ANSI color, column
+# reorder, and box-drawing drift that a human-table grep would trip on; a real
+# row carries a "status" field.
+if ! rw deployment list --service "$SERVICE" --environment "$ENVIRONMENT" --json 2>&1 \
+     | grep -qE '"status"[[:space:]]*:[[:space:]]*"[A-Z_]+"'; then
+  echo "Railway CLI can't list deployments for '$SERVICE'/'$ENVIRONMENT' (unauthenticated, wrong service, or wrong env). Either:"
   echo "  - run: ! railway login        (interactive, expires)"
   echo "  - or:  dotenvx set RAILWAY_TOKEN <project-token>  (long-lived)"
   echo "Skipping prod-deploy verification. Check Railway dashboard manually."
@@ -64,7 +75,10 @@ fi
 # SUCCESS responsive (build dominates wall-clock anyway).
 START=$SECONDS
 while [ $((SECONDS - START)) -lt 600 ]; do
-  s=$(rw deployment list --service "$SERVICE" 2>/dev/null | sed -n '2p' \
+  # --json lists newest deploy first; take the first "status" value. Robust to
+  # table format / ANSI / row-order changes that the old `sed -n 2p` assumed.
+  s=$(rw deployment list --service "$SERVICE" --environment "$ENVIRONMENT" --json 2>/dev/null \
+       | grep -oE '"status"[[:space:]]*:[[:space:]]*"[A-Z_]+"' | head -1 \
        | grep -oE 'SUCCESS|FAILED|CRASHED|REMOVED|BUILDING|DEPLOYING|QUEUED|INITIALIZING')
   case "$s" in
     SUCCESS)
