@@ -49,15 +49,29 @@ fi
 # make it exit non-zero even when valid; (2) on projects with many environments
 # the CLI decode-errors on status ("expected value at line 1 column 1") while
 # `deployment list` still works -- preach-hub (21 PR-preview envs) hit this and
-# false-skipped a live deploy. --json output is immune to ANSI color, column
-# reorder, and box-drawing drift that a human-table grep would trip on; a real
-# row carries a "status" field.
-if ! rw deployment list --service "$SERVICE" --environment "$ENVIRONMENT" --json 2>&1 \
-     | grep -qE '"status"[[:space:]]*:[[:space:]]*"[A-Z_]+"'; then
-  echo "Railway CLI can't list deployments for '$SERVICE'/'$ENVIRONMENT' (unauthenticated, wrong service, or wrong env). Either:"
+# false-skipped a live deploy.
+#
+# Gate on JSON-ARRAY SHAPE, not on a terminal "status" row. An authenticated
+# call returns a JSON array starting with "[", EVEN WHEN EMPTY ([] = authed but
+# no deploy registered yet -- common in the seconds right after a merge, when
+# /ship fires this in the background). A failure returns an error STRING with no
+# leading "[" ("Invalid RAILWAY_TOKEN...", a decode error, wrong service/env).
+# The old gate grepped for "status":"X" and so treated a momentarily-empty list
+# as an AUTH failure, printing "run railway login" when the token was fine --
+# a relink rabbit hole for a pure timing blip. On real failure, echo the RAW CLI
+# output so the actual cause is shown, never guessed.
+probe=$(rw deployment list --service "$SERVICE" --environment "$ENVIRONMENT" --json 2>&1)
+# Strip ANSI escapes + flatten whitespace before the shape test: `2>&1` merges
+# the CLI's color codes / progress spinner, so the bare "[" may not be the first
+# line. After stripping, an authed array begins with "[" ("[" empty or "[{").
+probe_clean=$(printf '%s' "$probe" | sed $'s/\x1b\\[[0-9;]*[a-zA-Z]//g' | tr -d '\n\r\t ')
+if [ "${probe_clean#\[}" = "$probe_clean" ]; then
+  echo "Railway CLI can't list deployments for '$SERVICE'/'$ENVIRONMENT'. Raw CLI output:"
+  printf '%s\n' "$probe" | head -3 | sed 's/^/  /'
+  echo "If that names an auth problem (e.g. 'Invalid RAILWAY_TOKEN', unauthenticated), fix auth:"
   echo "  - run: ! railway login        (interactive, expires)"
   echo "  - or:  dotenvx set RAILWAY_TOKEN <project-token>  (long-lived)"
-  echo "Skipping prod-deploy verification. Check Railway dashboard manually."
+  echo "Otherwise it is a wrong service/env or a transient API blip -- re-run, or check the dashboard."
   exit 2
 fi
 
