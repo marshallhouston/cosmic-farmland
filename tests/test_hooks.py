@@ -246,6 +246,50 @@ class TestEnforceWorktree(HookTestCase):
                 self.assertEqual(rc, 0)
                 self.assertFalse(is_deny(out), f"expected no deny for {command!r}, got {out!r}")
 
+    def test_allows_pattern_quoted_in_string(self):
+        # The branch-create pattern appearing only INSIDE a quoted arg
+        # (echo/printf/commit-message/JSON payload/grep) is NOT an executed
+        # branch create and must not trip the guard.
+        # (regression: 2026-06-10 -- the old substring `search` fired on any
+        # command that merely contained the literal pattern, blocking benign
+        # Bash like a hook-test harness or an echoed string.)
+        bc = "git " + "checkout -b x"
+        for command in [
+            'echo "%s"' % bc,
+            "printf '%%s' '{\"cmd\":\"%s\"}' > /tmp/p.json" % bc,
+            'git commit -m "wip on %s flow"' % bc,
+            'grep -n "%s" notes.txt' % bc,
+        ]:
+            with self.subTest(command=command):
+                rc, out = run_hook("enforce-worktree.py", self._bash(command), self.home)
+                self.assertEqual(rc, 0)
+                self.assertFalse(is_deny(out), f"expected no deny for {command!r}, got {out!r}")
+
+    def test_env_assignment_prefix_still_denies(self):
+        # A real branch create hidden behind leading VAR=val assignments is
+        # still caught (the assignment prefix is stripped before head-matching).
+        command = "FOO=1 BAR=baz " + "git " + "checkout -b x"
+        rc, out = run_hook("enforce-worktree.py", self._bash(command), self.home)
+        self.assertEqual(rc, 0)
+        self.assertTrue(is_deny(out), out)
+
+    def test_redirected_branch_create_still_denies(self):
+        # Trailing redirection keeps the create at the segment head.
+        command = "git " + "checkout -b x" + " > /tmp/log 2>&1"
+        rc, out = run_hook("enforce-worktree.py", self._bash(command), self.home)
+        self.assertEqual(rc, 0)
+        self.assertTrue(is_deny(out), out)
+
+    def test_command_wrapper_and_subshell_still_deny(self):
+        # Leading wrappers / subshell parens are stripped before head-matching,
+        # so they can't smuggle a real create past the guard.
+        bc = "git " + "checkout -b x"
+        for command in ["sudo " + bc, "time " + bc, "(" + bc + ")", "FOO=1 sudo " + bc]:
+            with self.subTest(command=command):
+                rc, out = run_hook("enforce-worktree.py", self._bash(command), self.home)
+                self.assertEqual(rc, 0)
+                self.assertTrue(is_deny(out), f"expected deny for {command!r}, got {out!r}")
+
     def test_bypass_env(self):
         rc, out = run_hook("enforce-worktree.py", self._bash("git checkout -b x"), self.home,
                            env_extra={"CLAUDE_WORKTREE_BYPASS": "1"})
