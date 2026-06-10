@@ -10,6 +10,7 @@ encodes the fix.
 - **PR #479 (2026-05-07)** — jq filtered only `.conclusion`, missed Railway `.state` pending, false-fell-through to merge mid-build. Fix: snapshot reads `.conclusion // .state`.
 - **PR #319 (2026-04-26)** — sat OPEN 5 min after green because `auto-merge-green` only fires on classify completion and the label was applied manually after. Fix: fall through to manual merge as soon as all-green (READY).
 - **PR #431 (2026-05-03)** — preach-hub killed GHA (#419), `statusCheckRollup` permanently empty, so the `PASSED>0` branch never matched and it stalled the full 5 min. Fix: 60s grace → READY_NO_CHECKS for CI-less repos.
+- **2026-06-10** — the separate `tail -F | grep` Monitor armed on the poll output never self-exits; two stale CI-verdict monitors lingered on the statusline after their PRs had merged. Fix: ship-poll owns the 5-min no-change stall bail (emits `STALL` + exits) so it self-exits on every verdict; ship.md drops the perpetual Monitor and reads the verdict off the background-task completion notification. Nothing perpetual is armed.
 
 ## Prod-verify (ship-verify-deploy.sh)
 
