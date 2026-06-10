@@ -280,6 +280,16 @@ class TestEnforceWorktree(HookTestCase):
         self.assertEqual(rc, 0)
         self.assertTrue(is_deny(out), out)
 
+    def test_command_wrapper_and_subshell_still_deny(self):
+        # Leading wrappers / subshell parens are stripped before head-matching,
+        # so they can't smuggle a real create past the guard.
+        bc = "git " + "checkout -b x"
+        for command in ["sudo " + bc, "time " + bc, "(" + bc + ")", "FOO=1 sudo " + bc]:
+            with self.subTest(command=command):
+                rc, out = run_hook("enforce-worktree.py", self._bash(command), self.home)
+                self.assertEqual(rc, 0)
+                self.assertTrue(is_deny(out), f"expected deny for {command!r}, got {out!r}")
+
     def test_bypass_env(self):
         rc, out = run_hook("enforce-worktree.py", self._bash("git checkout -b x"), self.home,
                            env_extra={"CLAUDE_WORKTREE_BYPASS": "1"})

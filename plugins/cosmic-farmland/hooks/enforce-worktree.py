@@ -55,10 +55,14 @@ BRANCH_CREATE = [
     re.compile(r"^git\s+" + _PRE + r"branch\s+(?!-[dDvla]|--list|--show|--delete|--move)[A-Za-z0-9_/.-]+\s+"),
 ]
 
-# Leading `VAR=val ` env-assignment prefixes on a simple command (e.g.
-# `FOO=1 git ...`). Stripped before head-matching so they can't hide a real
-# branch create behind an assignment.
-_ASSIGN = re.compile(r"^(?:\w+=(?:'[^']*'|\"[^\"]*\"|\S+)\s+)*")
+# Leading noise on a simple command, stripped before head-matching so it can't
+# hide a real branch create behind a prefix: `VAR=val ` env assignments
+# (`FOO=1 git ...`), common command wrappers (`sudo`/`command`/`nohup`/`time`),
+# and an opening subshell paren (`(git ...`, `$(git ...`). Each requires a
+# trailing space/boundary so `sudoer`/`timeout`/etc. are left intact.
+_LEAD = re.compile(
+    r"^(?:\w+=(?:'[^']*'|\"[^\"]*\"|\S+)\s+|(?:sudo|command|nohup|time)\s+|\$?\(\s*)*"
+)
 
 
 def _segments(cmd: str):
@@ -67,6 +71,12 @@ def _segments(cmd: str):
     Each segment is one simple-command candidate. A `cd /r && <branch-create>`
     line splits so the create is judged as a segment head, not as a substring of
     the whole line.
+
+    Limitation: the split is quote-UNAWARE -- a separator inside a quoted arg
+    (e.g. `echo "a | git checkout -b x"`) still splits, so that narrow case can
+    still false-positive. The common bare case (no embedded separator) is
+    handled. A full fix needs shlex-style tokenization; deferred as a strict
+    no-worse-than-before tradeoff.
     """
     return re.split(r"&&|\|\||[;\n|]", cmd)
 
@@ -79,7 +89,7 @@ def flags_branch_create(cmd: str) -> bool:
     branch-create `git`.
     """
     for seg in _segments(cmd):
-        seg = _ASSIGN.sub("", seg.strip())
+        seg = _LEAD.sub("", seg.strip())
         if any(p.match(seg) for p in BRANCH_CREATE):
             return True
     return False
