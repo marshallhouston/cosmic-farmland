@@ -86,10 +86,53 @@ TIME_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# Header tokens that mark a markdown table as DATA (telemetry, metrics, specs)
+# rather than a forward-looking estimate table. If a table's header row contains
+# any of these, every cell is a measured value -- drop the whole table before
+# linting (mirrors the quoted-span / code-span citation rule). Without this,
+# per-cell durations like "12720ms" never see the "P95" column header (it's rows
+# away, outside the +-40 char context window) and false-fire.
+_TABLE_DATA_HEADER = re.compile(
+    r"\b(p001|p01|p05|p10|p25|p50|p75|p90|p95|p99|p999|"
+    r"max|min|avg|mean|median|runs?|count|duration|latency|"
+    r"ms|sec|seconds?|elapsed|boot|p\d{2,3})\b",
+    re.IGNORECASE,
+)
+
+
+def _strip_data_tables(text: str) -> str:
+    """Drop markdown tables whose header row marks them as data."""
+    lines = text.split("\n")
+    out = []
+    i = 0
+    n = len(lines)
+    while i < n:
+        line = lines[i]
+        # Table block: "|...|" header, "|---|" separator, then "|...|" rows.
+        if line.lstrip().startswith("|") and i + 1 < n and re.match(
+            r"^\s*\|[\s:|-]+\|?\s*$", lines[i + 1]
+        ):
+            header_is_data = bool(_TABLE_DATA_HEADER.search(line))
+            j = i + 2
+            while j < n and lines[j].lstrip().startswith("|"):
+                j += 1
+            if header_is_data:
+                i = j  # skip the whole table
+                continue
+            out.extend(lines[i:j])
+            i = j
+            continue
+        out.append(line)
+        i += 1
+    return "\n".join(out)
+
+
 # Lines we should NOT lint. Strip these before applying the pattern.
 def strip_safe_zones(text: str) -> str:
     # Drop fenced code blocks.
     text = re.sub(r"```[\s\S]*?```", "", text)
+    # Drop data tables (telemetry/metrics) -- cells are measured values.
+    text = _strip_data_tables(text)
     # Drop inline code spans.
     text = re.sub(r"`[^`\n]*`", "", text)
     # Drop quoted spans (straight + curly double quotes). Quoting is citation --
