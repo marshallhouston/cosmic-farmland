@@ -39,13 +39,50 @@ import sys
 # branch-create patterns and effective_cwd both see the `git -C <dir> ...` form.
 _PRE = r"(?:-C\s+\S+\s+)?"
 
-# Branch-creation patterns. Conservative: only flags that DEFINITELY create a branch.
+# Branch-creation patterns. Conservative: only flags that DEFINITELY create a
+# branch. Anchored at segment start (^) -- matched against individual shell
+# segments whose head is the git invocation, NOT searched across the whole
+# command string. That distinction is load-bearing: a command that merely
+# QUOTES the pattern (an echoed string, a commit message, a JSON/test payload)
+# must NOT trip the guard -- only an actually-executed branch create should.
+# (why: 2026-06-10 -- the old `\bgit...` *search* fired on any command that
+# contained the literal substring anywhere, e.g. a hook-test harness feeding a
+# crafted payload or `echo`/`printf` of the pattern, blocking benign Bash.)
 BRANCH_CREATE = [
-    re.compile(r"\bgit\s+" + _PRE + r"checkout\s+-b\b"),
-    re.compile(r"\bgit\s+" + _PRE + r"switch\s+-c\b"),
-    re.compile(r"\bgit\s+" + _PRE + r"switch\s+--create\b"),
-    re.compile(r"\bgit\s+" + _PRE + r"branch\s+(?!-[dDvla]|--list|--show|--delete|--move)[A-Za-z0-9_/.-]+\s+"),
+    re.compile(r"^git\s+" + _PRE + r"checkout\s+-b\b"),
+    re.compile(r"^git\s+" + _PRE + r"switch\s+-c\b"),
+    re.compile(r"^git\s+" + _PRE + r"switch\s+--create\b"),
+    re.compile(r"^git\s+" + _PRE + r"branch\s+(?!-[dDvla]|--list|--show|--delete|--move)[A-Za-z0-9_/.-]+\s+"),
 ]
+
+# Leading `VAR=val ` env-assignment prefixes on a simple command (e.g.
+# `FOO=1 git ...`). Stripped before head-matching so they can't hide a real
+# branch create behind an assignment.
+_ASSIGN = re.compile(r"^(?:\w+=(?:'[^']*'|\"[^\"]*\"|\S+)\s+)*")
+
+
+def _segments(cmd: str):
+    """Split a command line into shell segments on && || ; | and newlines.
+
+    Each segment is one simple-command candidate. A `cd /r && <branch-create>`
+    line splits so the create is judged as a segment head, not as a substring of
+    the whole line.
+    """
+    return re.split(r"&&|\|\||[;\n|]", cmd)
+
+
+def flags_branch_create(cmd: str) -> bool:
+    """True iff some shell segment's HEAD is an actual branch-create git command.
+
+    Substring mentions inside echo/printf/commit-message/quoted args do not
+    count -- their segment head is `echo`/`printf`/`git commit`/etc., not a
+    branch-create `git`.
+    """
+    for seg in _segments(cmd):
+        seg = _ASSIGN.sub("", seg.strip())
+        if any(p.match(seg) for p in BRANCH_CREATE):
+            return True
+    return False
 
 
 def effective_cwd(cmd: str, session_cwd: str) -> str:
@@ -125,7 +162,7 @@ def main():
     if not cmd:
         return 0
 
-    if not any(p.search(cmd) for p in BRANCH_CREATE):
+    if not flags_branch_create(cmd):
         return 0
 
     session_cwd = payload.get("cwd") or os.getcwd()
