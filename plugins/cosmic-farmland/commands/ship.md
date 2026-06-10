@@ -28,18 +28,13 @@ If not, stop and tell the user.
    - `risk:needs-scoring` or no label (in a classifier repo) → auto-invoke `/risk-score <pr>` once, re-read, resume. Still missing → STOP, tell user to inspect the classifier run.
    - Rationale: the classifier is the system's blast-radius signal; ignoring it defeats the two-stage pipeline. A missing label is almost always a timing gap, so auto-score rather than punt.
 
-3. **Poll until green — background, not foreground.** Run `${CLAUDE_PLUGIN_ROOT}/scripts/ship-poll.sh <pr>` with `run_in_background: true`, then arm `Monitor` on its output file:
-   ```
-   tail -n 0 -F <bg-output-file> | grep -E --line-buffered "READY|READY_NO_CHECKS|FAILURE|merged|closed|TIMEOUT"
-   ```
-   Surface the output-file path in your reply so the user can `! tail -f` it. The script emits one heartbeat per tick and a final verdict token. Act on it:
+3. **Poll until green — background, not foreground.** Run `${CLAUDE_PLUGIN_ROOT}/scripts/ship-poll.sh <pr>` with `run_in_background: true`. It **self-exits** the instant the PR reaches a terminal-for-ship state, emitting one heartbeat per tick and a final verdict token on its last line; the background task then re-invokes you with that output. **Do NOT arm a `tail -F | grep` Monitor on it** — a perpetual Monitor never self-exits and lingers on the statusline after the verdict already fired, piling up across back-to-back ships (why: 2026-06-10 — two stale CI-verdict monitors sat armed after their PRs had merged). The background-task completion notification IS the signal. Surface the output-file path so the user can `! tail -f` it. Act on the verdict token:
    - `merged` → auto-merge already fired; skip to step 6.
    - `READY` / `READY_NO_CHECKS` → break, go to step 4 (manual merge — auto-merge didn't fire or repo has no CI).
    - `FAILURE` → step 3a.
-   - `closed` → stop. `TIMEOUT` (20 min) → report what's pending, stop.
-   - Layer a 5-min no-state-change stall bail: a check is hung or the PR is gated on something outside the rollup (review required, branch protection).
+   - `STALL` → ship-poll saw no state change for 5 min: a check is hung or the PR is gated outside the rollup (review required, branch protection). Report what's pending + the gate, stop.
+   - `closed` → stop. `TIMEOUT` (20 min hard cap) → report what's pending, stop.
    - Never `gh pr checks --watch` (blocks on the slowest check, no liveness output).
-   - **`TaskStop` the monitor the instant you consume its verdict.** The `tail -F | grep` Monitor never self-exits — it stays armed until its 20-min timeout and lingers on the statusline even though the verdict token already fired. The moment you act on `merged`/`READY`/`READY_NO_CHECKS`/`FAILURE`/`closed`/`TIMEOUT`, stop it by `task_id`. Stale monitors pile up across back-to-back ships. (why: 2026-06-10 — two CI-verdict monitors sat armed on the statusline after their PRs had already merged.)
 
 3a. **Investigate every failure automatically — never punt.** Pull the log (`gh run view --job <job-id> --log-failed`), name the root cause in one sentence (code / infra / flake / config / secret / upstream). Then check if it actually blocks: `gh pr view <pr> --json mergeable,mergeStateStatus`. If `MERGEABLE` and the failed check is non-required (common on private repos), it's cosmetic — continue to step 4, note it in the report. If it's a real blocker: code issue → report file/line + fix, stop; infra/billing/upstream → report cause + affected workflow + remediation, stop; flake → `gh run rerun <run-id> --failed` once, back to step 3 (fails again = not a flake).
 
@@ -55,7 +50,7 @@ If not, stop and tell the user.
    - Not in a worktree → `git branch -D <branch>` from main.
    - Then `git checkout main 2>&1 | tail -2; git pull --ff-only 2>&1 | tail -3`.
    - Local-branch cleanup is mandatory: the pretool hook strips `--delete-branch` inside a worktree, so the merge only deleted the *remote* branch.
-   - **Stop any lingering background tasks.** If the step-3 monitor wasn't already stopped, `TaskStop` it now. Leave the step-6a deploy-verify shell running (it self-exits and reports), but kill any other `run_in_background` poll shell you no longer need. Statusline should be clear of this ship's tasks before you report.
+   - **No lingering background tasks.** ship-poll self-exits on its verdict, so there is no Monitor to stop. Leave the step-6a deploy-verify shell running (it self-exits and reports). If you armed any other `run_in_background` shell, `TaskStop` it. Statusline should be clear of this ship's tasks before you report.
 
 6a. **Verify prod deploy** (skip if no `railway.json`). Run `${CLAUDE_PLUGIN_ROOT}/scripts/ship-verify-deploy.sh <pr> <service> [health-url] [environment]` with `run_in_background: true`; report the deploy line as a follow-up when it exits. The script handles the timeout/auth/diff-gate/poll logic and exits 0 (verified or cleanly skipped) or 2 (couldn't verify → tell user to check the dashboard). Get `<service>` from `railway status --json` (the service whose source repo matches this one); derive `[health-url]` from the prod domain + the repo's health path (e.g. `https://<domain>/api/health`) — omit it if unknown. `[environment]` defaults to `production`; pass it only if the repo's prod env is named otherwise. A green check is not a green deploy — preview and prod pass different gates. **If the deploy line reports `FAILED`/`CRASHED`, investigate per the step-3a discipline (pull logs, name root cause) — don't just relay the string.**
 
