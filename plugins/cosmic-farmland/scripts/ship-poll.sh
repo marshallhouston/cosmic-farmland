@@ -61,6 +61,8 @@ while [ $((SECONDS - START)) -lt 1200 ]; do
   # has not changed for 5 min we are OPEN with pending checks that are not
   # moving -- a hung check or a gate outside the rollup. Emit STALL and exit so
   # the background task notifies the caller; no perpetual Monitor is needed.
+  # A flapping rollup (snapshot changes every tick) never stalls -- it falls
+  # through to the 20-min TIMEOUT instead, the benign failure direction.
   # (why: 2026-06-10 stale-monitor leak.)
   if [ "$SNAP" != "$PREV" ]; then LAST_CHANGE=$SECONDS; PREV="$SNAP"; fi
   if [ $((SECONDS - LAST_CHANGE)) -ge 300 ]; then
