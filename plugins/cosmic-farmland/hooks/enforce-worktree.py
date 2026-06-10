@@ -3,13 +3,23 @@
 
 Marshall rule (CLAUDE.md): ALWAYS worktrees, no exceptions for non-trivial work.
 Passive measurement (worktree-discipline.py logs asking patterns) is not enough --
-the model can silently `git checkout -b` from the primary checkout, commit, push,
-and ship without ever asking, bypassing the rule entirely. Real incident
-2026-05-03: PR #429 created this way despite worktree-discipline.py being live.
+the model can silently create a branch (`checkout -b` / `switch -c`) from the
+primary checkout, commit, push, and ship without ever asking, bypassing the rule
+entirely. Real incident 2026-05-03: PR #429 created this way despite
+worktree-discipline.py being live.
 
 This hook fires on Bash before the command runs. If the command creates a new
-branch and cwd is the primary worktree (not a linked worktree), block and tell
-the model to use `git worktree add` instead.
+branch and the *target* repo is a primary worktree (not a linked worktree),
+block and point at the right remedy.
+
+Target resolution: the tool reports the session launch dir as cwd, but a single
+command can retarget another repo via a leading `cd <dir> &&` or `git -C <dir>`.
+`effective_cwd` honors those so a cross-repo tooling edit is judged against the
+repo it actually touches, not the session repo. When the target differs from the
+session repo, EnterWorktree (which only manages the session repo's worktrees)
+can't help, so the remedy switches to a plain `git worktree add` in the target.
+(why: 2026-06-10 false-positive -- `cd /other/repo && <branch-create>` blocked
+with an unusable EnterWorktree suggestion + the session repo's dirty files.)
 
 Detection of primary vs linked worktree: in a linked worktree, `git rev-parse
 --git-dir` returns a path under .git/worktrees/<name>; in the primary, it
@@ -21,18 +31,54 @@ Bypass: set CLAUDE_WORKTREE_BYPASS=1 in env (rare, e.g. fixing main directly).
 import json
 import os
 import re
-import shlex
 import subprocess
 import sys
 
 
+# Optional `-C <dir>` (and similar) between `git` and the subcommand, so the
+# branch-create patterns and effective_cwd both see the `git -C <dir> ...` form.
+_PRE = r"(?:-C\s+\S+\s+)?"
+
 # Branch-creation patterns. Conservative: only flags that DEFINITELY create a branch.
 BRANCH_CREATE = [
-    re.compile(r"\bgit\s+checkout\s+-b\b"),
-    re.compile(r"\bgit\s+switch\s+-c\b"),
-    re.compile(r"\bgit\s+switch\s+--create\b"),
-    re.compile(r"\bgit\s+branch\s+(?!-[dDvla]|--list|--show|--delete|--move)[A-Za-z0-9_/.-]+\s+"),
+    re.compile(r"\bgit\s+" + _PRE + r"checkout\s+-b\b"),
+    re.compile(r"\bgit\s+" + _PRE + r"switch\s+-c\b"),
+    re.compile(r"\bgit\s+" + _PRE + r"switch\s+--create\b"),
+    re.compile(r"\bgit\s+" + _PRE + r"branch\s+(?!-[dDvla]|--list|--show|--delete|--move)[A-Za-z0-9_/.-]+\s+"),
 ]
+
+
+def effective_cwd(cmd: str, session_cwd: str) -> str:
+    """Resolve the dir the git command actually targets.
+
+    A `git -C <dir>` on the command wins (it is what git itself uses); else a
+    leading `cd <dir> &&|;` prefix. Relative paths resolve against session_cwd.
+    Falls back to session_cwd when nothing resolves to a real directory.
+    """
+    cand = None
+    c_flags = re.findall(r"\bgit\s+-C\s+(['\"]?)([^'\"\s]+)\1", cmd)
+    if c_flags:
+        cand = c_flags[-1][1]
+    else:
+        cd = re.match(r"\s*cd\s+(['\"]?)([^'\"&;|]+)\1\s*(?:&&|;)", cmd)
+        if cd:
+            cand = cd.group(2).strip()
+    if not cand:
+        return session_cwd
+    cand = os.path.expanduser(cand)
+    if not os.path.isabs(cand):
+        cand = os.path.join(session_cwd, cand)
+    return cand if os.path.isdir(cand) else session_cwd
+
+
+def repo_root(cwd: str):
+    try:
+        return os.path.realpath(subprocess.check_output(
+            ["git", "-C", cwd, "rev-parse", "--show-toplevel"],
+            stderr=subprocess.DEVNULL, text=True,
+        ).strip())
+    except Exception:
+        return None
 
 
 def is_primary_worktree(cwd: str) -> bool:
@@ -82,15 +128,17 @@ def main():
     if not any(p.search(cmd) for p in BRANCH_CREATE):
         return 0
 
-    # cwd: tool may run in arbitrary dir; default to session cwd
-    cwd = payload.get("cwd") or os.getcwd()
+    session_cwd = payload.get("cwd") or os.getcwd()
+    cwd = effective_cwd(cmd, session_cwd)
 
     if not is_primary_worktree(cwd):
         return 0
 
-    # Suggest worktree path: sibling dir of primary, branch-name-derived
+    cross_repo = repo_root(cwd) != repo_root(session_cwd)
+
+    # Suggest worktree path: sibling dir of the TARGET primary, branch-derived
     branch_match = re.search(
-        r"git\s+(?:checkout\s+-b|switch\s+(?:-c|--create)|branch)\s+(\S+)",
+        r"git\s+" + _PRE + r"(?:checkout\s+-b|switch\s+(?:-c|--create)|branch)\s+(\S+)",
         cmd,
     )
     branch = branch_match.group(1) if branch_match else "<branch>"
@@ -99,7 +147,6 @@ def main():
     slug = branch.replace("/", "-")
     suggested_path = os.path.join(parent, f"{repo_name}-{slug}")
 
-    dirty = dirty_files(cwd)
     header = (
         f"Blocked: branch creation from primary worktree ({cwd}).\n"
         f"Marshall rule: ALWAYS worktrees, no exceptions. Branching in the primary "
@@ -110,10 +157,25 @@ def main():
         f"set CLAUDE_WORKTREE_BYPASS=1 for one command."
     )
 
-    if dirty:
+    if cross_repo:
+        # Target is a different repo than the session. EnterWorktree only
+        # manages the session repo's worktrees, so it can't help here -- use a
+        # plain git worktree in the target repo instead.
+        reason = (
+            header
+            + f"This command targets a different repo ({cwd}) than the session "
+            + f"({session_cwd}).\n"
+            + "EnterWorktree only manages the session repo, so make a plain "
+            + "worktree in the target:\n"
+            + f"  git -C {cwd} worktree add {suggested_path} -b {branch}\n"
+            + f"  cd {suggested_path}   # then commit + push from there\n"
+            + bypass
+        )
+    elif dirty_files(cwd):
         # Primary has uncommitted edits. A bare `worktree add` from main would
         # leave them behind. Carry them across via a global stash (stash is
         # shared across worktrees of the same repo, so pop works in the new one).
+        dirty = dirty_files(cwd)
         listed = "\n".join(f"    {fn}" for fn in dirty[:12])
         more = f"\n    ... (+{len(dirty) - 12} more)" if len(dirty) > 12 else ""
         reason = (
