@@ -257,6 +257,58 @@ class TestEnforceWorktree(HookTestCase):
         self.assertEqual(rc, 0)
         self.assertIsNone(out)
 
+    def _reason(self, parsed):
+        return parsed["hookSpecificOutput"]["permissionDecisionReason"]
+
+    def _other_repo(self):
+        other = Path(self._tmp.name) / "other"
+        other.mkdir()
+        env = clean_env(HOME=self._tmp.name)
+        for c in (["git", "init", "-q", "-b", "main"],
+                  ["git", "config", "user.email", "t@t.t"],
+                  ["git", "config", "user.name", "t"]):
+            subprocess.run(c, cwd=other, env=env, check=True)
+        (other / "f.txt").write_text("x")
+        subprocess.run(["git", "add", "."], cwd=other, env=env, check=True)
+        subprocess.run(["git", "commit", "-qm", "init"], cwd=other, env=env, check=True)
+        return other
+
+    def test_cd_prefix_cross_repo_plain_worktree(self):
+        # `cd /other-repo && <branch-create>` is judged against the TARGET repo,
+        # and -- since it differs from the session repo -- gets the plain
+        # `git worktree` remedy, not the unusable EnterWorktree one.
+        other = self._other_repo()
+        bc = "git " + "checkout -b x"
+        payload = {"tool_name": "Bash",
+                   "tool_input": {"command": f"cd {other} && {bc}"},
+                   "cwd": str(self.repo)}
+        rc, out = run_hook("enforce-worktree.py", payload, self.home)
+        self.assertTrue(is_deny(out), out)
+        reason = self._reason(out)
+        self.assertIn("different repo", reason)
+        self.assertIn("git -C", reason)
+        self.assertNotIn("EnterWorktree name", reason)
+
+    def test_git_dash_C_cross_repo(self):
+        # `git -C /other-repo <branch-create>` resolves the target via -C.
+        other = self._other_repo()
+        bc = "git -C " + str(other) + " " + "checkout -b x"
+        payload = {"tool_name": "Bash", "tool_input": {"command": bc},
+                   "cwd": str(self.repo)}
+        rc, out = run_hook("enforce-worktree.py", payload, self.home)
+        self.assertTrue(is_deny(out), out)
+        self.assertIn("different repo", self._reason(out))
+
+    def test_cd_same_repo_uses_enterworktree(self):
+        # cd into the SAME (session) repo still resolves to the EnterWorktree remedy.
+        bc = "git " + "checkout -b x"
+        payload = {"tool_name": "Bash",
+                   "tool_input": {"command": f"cd {self.repo} && {bc}"},
+                   "cwd": str(self.repo)}
+        rc, out = run_hook("enforce-worktree.py", payload, self.home)
+        self.assertTrue(is_deny(out), out)
+        self.assertIn("EnterWorktree name", self._reason(out))
+
 
 # --- shared contract: malformed / missing input never crashes -------------
 
