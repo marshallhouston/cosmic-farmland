@@ -78,7 +78,7 @@ The script leaves only a smoke test. Add real coverage:
   content changes.
 - If a test imports via the `@/` alias, ensure `vitest.config.ts` has a matching
   `resolve.alias` (`"@" -> ./src`); add it if missing.
-- Run `bun run test` until green. Don't test purely-presentational components or `ui/`.
+- Run `BUN_OPTIONS= bun run test` until green (the `BUN_OPTIONS=` prefix is required under Claude Code: a session-injected `--preload` otherwise makes `bun run <script>` bail to help text and run nothing). Don't test purely-presentational components or `ui/`.
 
 ### 2. design.html — design-system reference
 
