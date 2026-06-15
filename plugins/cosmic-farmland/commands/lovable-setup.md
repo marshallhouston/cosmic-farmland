@@ -102,6 +102,10 @@ the URL is shared via text / Slack / social. Reuse the design system from step 2
 
 - Generate a simple branded SVG favicon — the app's initial (or a minimal mark) on
   the accent color, using the design-system palette. Scalable, no raster needed.
+- **Confirm it's actually LINKED**, not just written. The script injects a
+  `rel="icon"` into `__root.tsx` for TanStack Start, but verify a `<link rel="icon">`
+  references `/favicon.svg` in the served head (plain-vite: in `index.html`). A favicon
+  file no route points at is invisible — the #1 recurring Lovable-export miss.
 
 **Social link preview (Open Graph + Twitter card):**
 
@@ -115,6 +119,15 @@ the URL is shared via text / Slack / social. Reuse the design system from step 2
   `og:title`, `og:description`, `og:type=website`, `og:image` (+ `:width`/`:height`),
   `og:url` (placeholder for the deploy domain), `twitter:card=summary_large_image`,
   `twitter:image`. Reuse the existing title / description if already present.
+  Put the shared og/twitter tags in `__root.tsx` (TanStack dedupes by key) and let the
+  `/` route override only title + description.
+- **Replace scaffold head placeholders.** Lovable seeds `title`/`description`/`og:*`
+  with the bare repo slug (e.g. `"systems-thinking"`) and a bogus `@slug` Twitter
+  handle. Swap in a readable brand + tagline; drop the fake handle.
+- **og:image / twitter:image must be ABSOLUTE once the domain is known.** Relative
+  paths (`/og-image.png`) do NOT unfurl on Twitter / Slack / iMessage. If the deploy
+  domain isn't wired yet, leave a `TODO` next to the tag and a relative path as a
+  stopgap — but flag that previews stay broken until it's absolute.
 - Verify: open `public/og-image.png` to confirm it renders, and check the meta is
   well-formed.
 
