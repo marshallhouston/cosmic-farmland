@@ -1,0 +1,49 @@
+#!/bin/sh
+# bun — lapdog/BUN_OPTIONS compatibility shim.
+#
+# lapdog (dd-apm Claude plugin) injects `BUN_OPTIONS=--preload <file>` into the
+# session env so it can instrument bun. But bun applies BUN_OPTIONS to EVERY
+# subcommand, and --preload is run-only — so:
+#   - package-mgmt subcommands (install/add/…) misparse it as run-mode and die.
+#   - `bun <BUN_OPTIONS> run <script>` puts --preload BEFORE the subcommand,
+#     which bun also rejects (--preload must FOLLOW `run`). This silently broke
+#     every `bun run <script>` and every bunx/bun-run-based git hook.
+#
+# Fix:
+#   - package-mgmt subcommands → strip BUN_OPTIONS entirely.
+#   - `run` → strip BUN_OPTIONS and re-inject --preload right after `run`, so
+#     lapdog's interception still applies and parsing succeeds.
+#   - everything else (direct file exec) → leave BUN_OPTIONS as-is.
+#
+# Installed by bin/install.sh as a symlink at ~/bin/bun, ahead of the real bun
+# on PATH. Real bun resolved dynamically below.
+# (history: broke `bun install` in fresh worktrees + bunx git hooks 2026-06-12;
+#  broke every `bun run <script>` when BUN_OPTIONS set 2026-06-15.)
+
+# Resolve the real bun — first bun on PATH that is not this shim.
+SELF="$HOME/bin/bun"
+REAL=""
+for cand in /opt/homebrew/bin/bun /usr/local/bin/bun; do
+  [ -x "$cand" ] && { REAL="$cand"; break; }
+done
+if [ -z "$REAL" ]; then
+  oldifs="$IFS"; IFS=:
+  for d in $PATH; do
+    if [ -x "$d/bun" ] && [ "$d/bun" != "$SELF" ]; then REAL="$d/bun"; break; fi
+  done
+  IFS="$oldifs"
+fi
+[ -n "$REAL" ] || { echo "bun-shim: cannot find the real bun on PATH" >&2; exit 127; }
+
+case "$1" in
+  install|i|add|a|remove|rm|x|pm|update|outdated|link|unlink|create|c|init|upgrade|audit|info|why)
+    unset BUN_OPTIONS ;;
+  run)
+    if [ -n "$BUN_OPTIONS" ]; then
+      opts="$BUN_OPTIONS"
+      unset BUN_OPTIONS
+      shift
+      exec "$REAL" run $opts "$@"
+    fi ;;
+esac
+exec "$REAL" "$@"
