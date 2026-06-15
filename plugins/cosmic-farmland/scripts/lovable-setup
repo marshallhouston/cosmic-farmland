@@ -168,6 +168,22 @@ else
   ok "Favicon present ($([ -n "$FAV" ] && echo "$FAV" || echo favicon.svg)) — left in place"
 fi
 
+# ── 5b. Link the favicon in the SSR head ──────────────────────────────
+# TanStack Start keeps <link> tags in the links[] array of __root.tsx. A
+# written favicon does nothing unless a route references it — Lovable exports
+# ship no icon link, so inject one if absent.
+if [ -f src/routes/__root.tsx ]; then
+  if grep -q 'links:' src/routes/__root.tsx 2>/dev/null && ! grep -q 'rel: "icon"' src/routes/__root.tsx 2>/dev/null; then
+    perl -0pi -e 's/(links:\s*\[)/$1\n      { rel: "icon", href: "\/favicon.svg", type: "image\/svg+xml" },/' src/routes/__root.tsx
+    ok "Linked /favicon.svg in __root.tsx head"
+  fi
+  # The scaffold seeds title/description/og with the bare repo slug. Warn if it
+  # survives — a real brand + tagline needs human judgment (do it in Phase B).
+  if grep -qE "(title|content): \"$PROJECT_NAME\"" src/routes/__root.tsx 2>/dev/null; then
+    warn "__root.tsx head still uses \"$PROJECT_NAME\" for title/description/og — set a readable brand + tagline."
+  fi
+fi
+
 # ── 6. Start script + SSR runtime shim ────────────────────────────────
 if [ "$SHAPE" = tanstack-ssr ]; then
   info "Writing bun-serve SSR shim (server-entry.ts)..."
