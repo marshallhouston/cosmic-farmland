@@ -1,5 +1,7 @@
 # loopback (was: feedback-bridge / bridge)
 
+> **Status (2026-06-16): partially superseded, not built.** Goal (a) — kill copy-paste friction in `feedback` skill — already solved by `contextbridge open` (commit afc9ab5; HTML+paste kept as fallback). Goal (b) — a standalone generalized `loopback`/`bridge` CLI reusable across skills — **unbuilt**. Original pain gone; only the generalization remains, and it needs a fresh value-prove before any code. Not shovel-ready.
+
 Dogfood-driven exploration: build a contextbridge-shaped CLI in cosmic-farmland that powers human-in-loop review for multiple skills via swappable UI templates. Goal is both (a) eliminate manual copy-paste friction in the current `feedback` skill and (b) learn contextbridge's architecture by reimplementing the transport, generalized.
 
 ## Why

@@ -1,6 +1,7 @@
 # cosmic-farmland semver judgment system
 
-Status: design locked (grill-me 2026-05-30, PTV-huff TRIM 2026-05-30). No code yet.
+Status: **SHIPPED** (PR #28). Archived. Impl: `scripts/semver_judge.py`, `bin/bump`, `.githooks/pre-commit` + `.githooks/pre-push`. Kept for design rationale.
+Original: design locked (grill-me 2026-05-30, PTV-huff TRIM 2026-05-30).
 
 ## Goal
 

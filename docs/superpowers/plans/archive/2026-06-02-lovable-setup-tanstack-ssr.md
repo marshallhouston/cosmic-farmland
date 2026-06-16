@@ -1,3 +1,5 @@
+> **ARCHIVED — SHIPPED in PR #30** (`feat(lovable-setup): TanStack-Start SSR support`). All tasks complete. Kept for reference.
+
 # lovable-setup TanStack-Start SSR Support — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
