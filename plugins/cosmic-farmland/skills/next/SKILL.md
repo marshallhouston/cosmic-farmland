@@ -27,7 +27,7 @@ Run these together, don't serialize:
 4. `gh pr checks` on current branch if a PR exists
 5. `ls .worktrees/ 2>/dev/null` + per-worktree `git -C <path> status -sb` — in-flight parallel work
 6. `gh issue list --limit 10 --state open`
-7. Planning docs — read whichever exist: `.claude/BACKLOG.md`, `BACKLOG.md`, `ROADMAP.md`, `docs/ROADMAP.md`, `docs/V1_PLUS.md`, `docs/MVP_SCOPE.md`, `docs/plans/`, `TODO.md`
+7. Planning docs — read whichever exist: `.claude/BACKLOG.md`, `BACKLOG.md`, `ROADMAP.md`, `docs/ROADMAP.md`, `docs/V1_PLUS.md`, `docs/MVP_SCOPE.md`, `docs/plans/`, `docs/superpowers/plans/`, `TODO.md`. **Skip `*/archive/` subdirs — already-shipped.**
 8. Stash list (`git stash list`) — abandoned WIP signal
 
 Skip anything that errors or is missing. Don't announce the skips.
@@ -48,6 +48,16 @@ Walk the signals in order; the first one that has a concrete next action wins. D
 10. **Clean + idle** → top 3 from planning docs / open issues / worktrees. Tag each `[BACKLOG]` / `[issue #N]` / `[worktree <name>]` / `[ROADMAP]`.
 
 If multiple apply, pick the most immediate (lower number wins).
+
+## Cross-check before listing a plan as unbuilt (repo > headers)
+
+Plan-doc status headers go stale — a doc reading "no code yet" / "0 tasks" can describe already-shipped work. **A header is a claim, not truth. Verify against repo state before listing a plan as next:**
+
+- Grep `git log --oneline -50` for the plan's feature name / scope. A matching `feat(...)` commit → shipped, don't list it.
+- Check whether the plan's named artifacts exist (the script/file/CLI the plan says it builds). Present → shipped.
+- If shipped but the doc still claims unbuilt: say so, and move the doc to `<dir>/archive/` with a SHIPPED header instead of listing it.
+
+Trust the repo over the header every time.
 
 ## Output format
 

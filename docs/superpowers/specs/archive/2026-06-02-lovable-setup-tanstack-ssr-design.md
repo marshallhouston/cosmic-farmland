@@ -1,3 +1,5 @@
+> **ARCHIVED — SHIPPED in PR #30.** Design realized. Kept for reference.
+
 # lovable-setup: TanStack-Start SSR support
 
 **Date:** 2026-06-02
