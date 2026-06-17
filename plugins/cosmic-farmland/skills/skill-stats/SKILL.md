@@ -141,16 +141,16 @@ two carry a personal API key / shell config):
    export OTEL_RESOURCE_ATTRIBUTES="service.name=claude-code,project=$proj,user.id=<you>"
    ```
 
-3. **Real names for local skills** — this plugin's `skill-telemetry.py`
-   PreToolUse(`Skill`) hook (auto-active when the plugin is installed). CC
-   redacts locally-sourced skill names (`skill.source` = userSettings /
-   projectSettings / local plugin-dir) to `custom_skill` and exposes no
-   `tool_use_id` to join the real name back. The hook reads the real name from
-   `tool_input` before the call and posts `event.name=skill.invoked` to the
-   `claude-code` dataset with real name + `project` + best-effort trigger
-   (`user-slash` exact; proactive/nested collapse to `model`). It reads the
-   Honeycomb key from `OTEL_EXPORTER_OTLP_HEADERS`, posts in the background,
-   and never blocks a skill call. No key in env → no-op.
+3. **Real names for local skills** come from the local transcripts, not from
+   exported telemetry. CC redacts locally-sourced skill names (`skill.source` =
+   userSettings / projectSettings / local plugin-dir) to `custom_skill` in OTel
+   and exposes no `tool_use_id` to join the real name back, so the Honeycomb
+   `claude-code` dataset is unreliable for local-skill names. This skill reads
+   `~/.claude/projects/**/*.jsonl` directly (Anthropic already writes them to
+   disk) where the real `skill` name is present in the `Skill` tool_input. No
+   hook, no daemon, no key required. (A `skill-telemetry.py` PreToolUse hook
+   posted real names to Honeycomb until 2026-06-17; removed once it had been
+   posting nothing for weeks and the transcript path covered the same need.)
 
 6. Keep output tight. Ranked table + headline + (if asked) prune list. Don't
    dump per-session detail unless asked.

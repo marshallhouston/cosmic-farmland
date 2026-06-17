@@ -2,11 +2,11 @@
 """PreToolUse Bash hook: block branch creation from primary worktree.
 
 Marshall rule (CLAUDE.md): ALWAYS worktrees, no exceptions for non-trivial work.
-Passive measurement (worktree-discipline.py logs asking patterns) is not enough --
-the model can silently create a branch (`checkout -b` / `switch -c`) from the
-primary checkout, commit, push, and ship without ever asking, bypassing the rule
-entirely. Real incident 2026-05-03: PR #429 created this way despite
-worktree-discipline.py being live.
+Passive measurement was not enough: the model can silently create a branch
+(`checkout -b` / `switch -c`) from the primary checkout, commit, push, and ship
+without ever asking, bypassing the rule entirely. Real incident 2026-05-03: PR
+#429 created this way despite a passive warn-only logger being live (that logger,
+worktree-discipline.py, was removed once this active block superseded it).
 
 This hook fires on Bash before the command runs. If the command creates a new
 branch and the *target* repo is a primary worktree (not a linked worktree),

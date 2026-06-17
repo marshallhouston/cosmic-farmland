@@ -26,48 +26,9 @@ import json
 import re
 import sys
 import os
-import time
 from datetime import datetime, timezone
 
-
-def read_last_assistant_text(transcript_path: str, max_wait_s: float = 1.0) -> str:
-    """Return text of most recent assistant turn."""
-    deadline = time.monotonic() + max_wait_s
-    while True:
-        try:
-            with open(transcript_path) as f:
-                lines = f.readlines()
-        except Exception:
-            return ""
-
-        last_type = None
-        for line in reversed(lines):
-            try:
-                d = json.loads(line)
-            except Exception:
-                continue
-            t = d.get("type")
-            if t in ("user", "assistant"):
-                last_type = t
-                break
-
-        if last_type == "assistant" or time.monotonic() >= deadline:
-            break
-        time.sleep(0.05)
-
-    for line in reversed(lines):
-        try:
-            d = json.loads(line)
-        except Exception:
-            continue
-        if d.get("type") != "assistant":
-            continue
-        for c in d.get("message", {}).get("content", []):
-            if isinstance(c, dict) and c.get("type") == "text":
-                txt = c.get("text", "")
-                if txt:
-                    return txt
-    return ""
+from _transcript import read_last_assistant_text
 
 
 # Em-dash (U+2014) and en-dash (U+2013). The hyphen-minus is fine.
