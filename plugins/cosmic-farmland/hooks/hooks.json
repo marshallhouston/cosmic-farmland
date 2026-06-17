@@ -47,16 +47,6 @@
             "timeout": 5
           }
         ]
-      },
-      {
-        "matcher": "Skill",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/skill-telemetry.py",
-            "timeout": 5
-          }
-        ]
       }
     ]
   }
