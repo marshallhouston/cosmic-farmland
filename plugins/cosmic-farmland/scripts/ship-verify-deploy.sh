@@ -80,7 +80,15 @@ fi
 # deploy-affecting paths -- it goes stale and false-skips (a UI diff that ships
 # inside the Docker image once matched nothing). grep -qv succeeds if ANY file
 # is outside the inert set.
-if ! gh pr diff "$PR" --name-only | grep -qvE '\.mdx?$|^docs/|\.test\.|\.spec\.|^\.github/'; then
+#
+# An EMPTY file list is NOT "docs-only" -- it means we could not read the diff,
+# and this step runs right after merge when `gh pr diff` on the just-merged,
+# branch-deleted PR briefly returns nothing. The `[ -n "$files" ]` guard makes an
+# empty list fall through to VERIFY rather than satisfy the skip (why: 2026-06-17
+# -- PR #29 false-skipped real Analyze.tsx + seedModel.ts changes with exit 0, so
+# no health check ran). Mirrors the empty-tolerance the poll loop below already has.
+files=$(gh pr diff "$PR" --name-only)
+if [ -n "$files" ] && ! printf '%s\n' "$files" | grep -qvE '\.mdx?$|^docs/|\.test\.|\.spec\.|^\.github/'; then
   echo "prod-verify skipped (diff is docs/test-only)"
   exit 0
 fi
