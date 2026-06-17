@@ -178,22 +178,6 @@ class TestDrift(HookTestCase):
         self.assertIsNone(out)
 
 
-# --- worktree-discipline.py (Stop) — warn-only -----------------------------
-
-class TestWorktreeDiscipline(HookTestCase):
-    def test_clean_silent(self):
-        rc, out = run_hook("worktree-discipline.py",
-                           stop_payload(self.home, "Worktree created. Working there now."), self.home)
-        self.assertEqual(rc, 0)
-        self.assertIsNone(out)
-
-    def test_match_no_block(self):
-        rc, out = run_hook("worktree-discipline.py",
-                           stop_payload(self.home, "Should I spike this on a branch?"), self.home)
-        self.assertEqual(rc, 0)
-        self.assertFalse(is_block(out))
-
-
 # --- no-asking-tool.py (PreToolUse: AskUserQuestion) — warn-only -----------
 
 class TestAskingTool(HookTestCase):
@@ -357,8 +341,8 @@ class TestEnforceWorktree(HookTestCase):
 # --- shared contract: malformed / missing input never crashes -------------
 
 ALL_HOOKS = ["no-reasking.py", "no-time-estimates.py", "no-drift.py",
-             "worktree-discipline.py", "no-asking-tool.py", "enforce-worktree.py"]
-STOP_HOOKS = ["no-reasking.py", "no-time-estimates.py", "no-drift.py", "worktree-discipline.py"]
+             "no-asking-tool.py", "enforce-worktree.py"]
+STOP_HOOKS = ["no-reasking.py", "no-time-estimates.py", "no-drift.py"]
 
 
 class TestRobustness(HookTestCase):
