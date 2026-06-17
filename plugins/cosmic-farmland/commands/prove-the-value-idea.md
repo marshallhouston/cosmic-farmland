@@ -3,12 +3,4 @@ description: Prove The Value Idea audit. Alias for /ptv-idea. Levels whiff|sniff
 argument-hint: "[whiff|sniff|huff|dutch-oven-yourselff] <idea text | path/to/spec.md | 'last turn'>"
 ---
 
-Invoke the `ptv-idea` skill.
-
-Args: `$ARGUMENTS`
-
-Parse args:
-- First token matching `whiff|sniff|huff|dutch-oven-yourselff` → level. Default `sniff`.
-- Remaining tokens → the idea to audit (inline text, file path, or `last turn`).
-
-Follow the skill's audit dimensions and output format exactly. Do not soften verdicts.
+Invoke the `ptv-idea` skill with args `$ARGUMENTS`. The skill owns arg parsing and output format.
