@@ -3,12 +3,4 @@ description: Prove The Value Motherfucker audit. Alias for /fart-sniffing-detect
 argument-hint: "[whiff|sniff|huff|dutch-oven-yourselff] [PR #N | git-range | --staged]"
 ---
 
-Invoke the `fart-sniffing-detection` skill.
-
-Args: `$ARGUMENTS`
-
-Parse args:
-- First token matching `whiff|sniff|huff|dutch-oven-yourselff` → level. Default `sniff`.
-- Remaining tokens → target (PR number, git range, or `--staged`). If absent, skill resolves per its input rules.
-
-Follow the skill's audit process and output format exactly. Do not soften verdicts.
+Invoke the `fart-sniffing-detection` skill with args `$ARGUMENTS`. The skill owns arg parsing and output format.
