@@ -87,6 +87,19 @@ fi
 
 # Poll for terminal deploy state. Cap 10 min (60 ticks of 10s); 10s tick keeps
 # SUCCESS responsive (build dominates wall-clock anyway).
+#
+# An empty `s` is NOT terminal. The merge that fired this script also kicks the
+# Railway deploy, so for the first seconds `deployment list` returns `[]` (authed
+# but no deploy row yet) -- and a single slow call can hit the 30s per-call cap
+# and come back empty too. The old `"")` case exited 0 on the FIRST empty result,
+# false-skipping the verify before the deploy ever registered (why: 2026-06-17 --
+# /ship reported "timed out or returned empty" while the deploy was building fine).
+# Tolerate empties: keep polling through the 600s window, only giving up after
+# EMPTY_GRACE consecutive empties (~1 min) with no deploy row ever seen -- that
+# distinguishes "deploy not registered yet" (retry) from "wrong service/env or
+# persistently broken CLI" (give up without burning the full 10 min).
+EMPTY_GRACE=6
+empties=0
 START=$SECONDS
 while [ $((SECONDS - START)) -lt 600 ]; do
   # --json lists newest deploy first; take the first "status" value. Robust to
@@ -103,8 +116,17 @@ while [ $((SECONDS - START)) -lt 600 ]; do
       echo "deploy=$s after $((SECONDS - START))s -- pull logs: rw logs <id> --service $SERVICE --deployment --lines 200"
       exit 0 ;;
     "")
-      echo "rw deployment list timed out or returned empty. Skipping prod-verify."
-      exit 0 ;;
+      empties=$((empties + 1))
+      if [ "$empties" -ge "$EMPTY_GRACE" ]; then
+        echo "rw deployment list returned empty ${empties}x (~$((empties * 10))s) -- no deploy registered for '$SERVICE'/'$ENVIRONMENT'. Skipping prod-verify; check dashboard."
+        exit 0
+      fi
+      ;;
+    *)
+      # Saw a real in-progress status (BUILDING/DEPLOYING/QUEUED/INITIALIZING):
+      # deploy exists, reset the empty counter so a later transient blip doesn't
+      # trip the grace bailout mid-build.
+      empties=0 ;;
   esac
   sleep 10
 done
