@@ -64,6 +64,21 @@ fi
 
 echo ""
 
+# --- Dev tool caches (all regenerate on demand) ---
+for pair in "uv:$HOME/.cache/uv" "npm:$HOME/.npm/_cacache" "bun:$HOME/.bun/install/cache" \
+            "puppeteer:$HOME/.cache/puppeteer" "u2net-models:$HOME/.u2net" \
+            "granola-updater:$HOME/Library/Caches/@granolaelectron-updater" \
+            "claude-desktop-electron:$HOME/Library/Application Support/Claude/Cache"; do
+    name="${pair%%:*}"; dir="${pair#*:}"
+    if [ -d "$dir" ]; then
+        size=$(du -sm "$dir" 2>/dev/null | awk '{print $1}')
+        rm -rf "$dir"
+        echo "## ${name} cache: cleared ${size}MB"
+    fi
+done
+
+echo ""
+
 # --- Stale Claude Code plugin caches ---
 PLUGINS_JSON=~/.claude/plugins/installed_plugins.json
 CACHE_ROOT=~/.claude/plugins/cache
@@ -89,9 +104,13 @@ for marketplace in os.listdir(root):
         if not os.path.isdir(pp): continue
         for ver in os.listdir(pp):
             vp = os.path.join(pp, ver)
-            if not os.path.isdir(vp): continue
+            # symlinks (e.g. hookify/core -> <ver>) alias real dirs; never rmtree them
+            if os.path.islink(vp) or not os.path.isdir(vp): continue
             real = os.path.realpath(vp)
             if real in active: continue
+            # a sibling symlink may point at this dir (it's the live version)
+            if any(os.path.realpath(os.path.join(pp, s)) == real
+                   for s in os.listdir(pp) if os.path.islink(os.path.join(pp, s))): continue
             sz = sum(os.path.getsize(os.path.join(r,f)) for r,_,fs in os.walk(vp) for f in fs)
             removed_bytes += sz
             shutil.rmtree(vp)
