@@ -10,7 +10,7 @@ No cloud, no API keys, no resident daemon.
 
 ## Reference implementation
 
-`~/lennys-newsletterpodcastdata-all/bin/lenny-semantic.py` is a proven local-semantic-search
+`~/code/lennys-newsletterpodcastdata-all/bin/lenny-semantic.py` is a proven local-semantic-search
 script. **Read it first.** Reuse its entire architecture; only
 the chunking and reference-labeling change for Bible text. Write the adapted script at
 `bin/semantic.py` in THIS directory.
