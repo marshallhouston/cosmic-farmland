@@ -5,27 +5,37 @@ description: "Dependency bump workflow for any bun repo. Buckets `bun outdated` 
 
 # /deps-sweep
 
-Repo-agnostic. Everything repo-specific (verify commands, prod check, parked deps) comes from the repo's own `CLAUDE.md` under a `## Deps sweep` heading, or falls back to `package.json` scripts. Do not fork this skill into a repo.
+Repo-agnostic. Verify commands and prod check come from the repo's own `CLAUDE.md` under a `## Deps sweep` heading; parked deps come from `.deps-held` at the repo root. Do not fork this skill into a repo.
 
 ## 0. Load repo context
 
 Read the repo's `CLAUDE.md` for a `## Deps sweep` section. It supplies:
 - **Verify** commands (typecheck / build / test). Fallback if absent: `bun run build && bun run test`.
 - **Prod check** (URL to curl, or deploy dashboard to eyeball). Skip if the repo has none.
-- **HELD** deps: parked by a decision, not by semver. A bump that is really a migration. Do NOT bump these. The section names each one and where it is tracked.
+- Any repo-specific traps worth knowing before you bump (peer ordering, a post-bump install step).
 
-If the repo has no such section and the sweep teaches you something durable (peer ordering, a post-bump install step, a dep to park), add the section at the end of the sweep. That is the only per-repo artifact this skill creates.
+Parked deps live in `.deps-held` at the repo root, not in prose, because the script reads them:
+
+```
+# <dep> | <why it is parked, and what unparks it> | <optional probe>
+typescript | TS 7 has no programmatic API, so `astro check` refuses to run. Tracked at ... | npm info @astrojs/check peerDependencies.typescript | grep -q 7 && echo "peer admits TS 7 now"
+```
+
+The reason is one field; **the probe is everything after it**, so it can contain pipes. The probe runs on every audit and prints under the entry. Write it to stay **silent while the gate is shut** and speak only when the dep becomes takeable, otherwise it is noise everyone learns to skip. A HELD row with no probe is just a slower "never".
+
+If the sweep teaches you something durable, write it back: a trap goes in the CLAUDE.md section, a parked dep goes in `.deps-held`. Those are the only per-repo artifacts this skill creates.
 
 ## 1. Bucket
 
-Run `bash "${CLAUDE_PLUGIN_ROOT}/skills/deps-sweep/scripts/deps-audit.sh"` from anywhere in the repo. Four buckets:
+Run `bash "${CLAUDE_PLUGIN_ROOT}/skills/deps-sweep/scripts/deps-audit.sh"` from anywhere in the repo. Five buckets:
 
+- **HELD** — listed in `.deps-held`. Do NOT bump. Checked before every other bucket, so a breaking semver-minor cannot slip into SAFE BATCH, the one bucket that says "bump without thinking".
 - **SAFE BATCH** — patch/minor where `update` == `latest`. One PR for all.
 - **MAJORS** — latest major > current major. One PR per dep, after the safe batch lands.
 - **EXACT-PINNED** — `update` < `latest` only because package.json pins an exact version (no `^`/`~`). Not peer-blocked. Edit the pin to bump; verify the new version's peers first with `npm info <dep>@<latest> peerDependencies`. Own PR.
 - **PEER-HELD** — `update` < `latest` under a caret/range spec, genuinely blocked on a peer dep. Bump alongside the core dep in a follow-up.
 
-Cross off anything listed as HELD in the repo's CLAUDE.md.
+`--self-test` runs the bucketing and `.deps-held` parsing checks with no network and no repo state. Run it after editing the script.
 
 ## 2. Audit
 
