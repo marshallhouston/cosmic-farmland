@@ -1,6 +1,6 @@
 ---
 name: fart-sniffing-detection
-description: "PTVM audit of recent commits/PRs. Flags bloat, ranks kill candidates. Triggers: /ptv, /ptvm, /fart-sniffing-detection, 'is this bloat', 'prove the value', skeptical review before merge."
+description: "PTVM audit of recent commits/PRs. Flags bloat, ranks kill candidates. Triggers: /ptv, /fart-sniffing-detection, 'is this bloat', 'prove the value', skeptical review before merge."
 argument-hint: "[level] [target]  e.g. 'huff PR #42', 'sniff main..HEAD', 'dutch-oven-yourselff' (staged)"
 ---
 
@@ -12,8 +12,6 @@ Skeptically review a batch of changes to snuff out the fluff. Prove every commit
 
 - `/fart-sniffing-detection [level] [target]`
 - `/ptv [level] [target]` — alias
-- `/ptvm [level] [target]` — alias
-- `/prove-the-value-motherfucker [level] [target]` — alias
 - "did we just add bloat?"
 - "PTVM these commits"
 - "which of these are fart-sniffing?"
