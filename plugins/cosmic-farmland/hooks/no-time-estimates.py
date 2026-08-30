@@ -24,7 +24,7 @@ import sys
 import os
 from datetime import datetime, timezone
 
-from _transcript import read_last_assistant_text
+from _transcript import PATCH_ONLY, read_last_assistant_text
 
 
 # Time-duration unit patterns. Matches "10 min", "2-4 weeks", "1.5 hours", etc.
@@ -194,6 +194,7 @@ def main():
             "Describe scope, complexity, and decomposition options instead "
             "(e.g. 'Low complexity: single edit + test' rather than '5 minutes'). "
             "Revise the output without numeric time units."
+            + PATCH_ONLY
         ),
     }))
     return 0

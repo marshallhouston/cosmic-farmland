@@ -47,3 +47,14 @@ def read_last_assistant_text(transcript_path: str, max_wait_s: float = 1.0) -> s
                 if txt:
                     return txt
     return ""
+
+
+# A blocking Stop hook re-runs the model in-turn. A bare "revise the output"
+# instruction makes it reprint the whole response, so marshall reads the same
+# answer twice. The block is what actually changes behavior (48 em-dash and 45
+# time-estimate catches in the friction log, ~92% precision), so keep blocking
+# and shrink the payload instead: ask for a patch, not a reprint.
+PATCH_ONLY = (
+    " Do NOT reprint the whole response. Emit ONLY the corrected sentences, "
+    "prefixed with 'Correction:'."
+)
