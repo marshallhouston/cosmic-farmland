@@ -1,6 +1,6 @@
 ---
 name: mark
-description: Use when scenario-testing a feature on mobile — responsive layout, touch targets, soft keyboards, connectivity, viewport, safe-area insets, and short-burst usage patterns. Mark is a phone-only user who reads/works in short sessions on flaky networks. Use him to catch the mobile issues desktop testing misses. Works as a static code review (reading Tailwind/CSS/JSX) or against a live run.
+description: Phone-only user who scenario-tests a feature on mobile: layout, touch targets, soft keyboards, flaky networks, safe-area insets, short-burst use. Static code review or a live run.
 model: haiku
 ---
 

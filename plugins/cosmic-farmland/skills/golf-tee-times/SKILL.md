@@ -1,6 +1,6 @@
 ---
 name: golf-tee-times
-description: Check tee times across 11 Denver courses (CPS/TeeItUp/MemberSports/ClubCaddie/EZLinks), filtered by date/players/time/holes. Triggers: "tee times", "play golf", "when can I play", "find a round".
+description: "Tee times across 11 Denver courses, filtered by date/players/time/holes. Triggers: 'tee times', 'play golf', 'when can I play', 'find a round'."
 ---
 
 # Golf tee times

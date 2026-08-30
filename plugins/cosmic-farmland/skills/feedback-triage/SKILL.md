@@ -1,6 +1,6 @@
 ---
 name: feedback-triage
-description: Triage raw feedback into structured items, optionally spawn worktrees for accepted ones. Triggers: "triage feedback", "rip on this", "/feedback-triage", or pasted block from named source. Not for single bugs or file review (use /feedback).
+description: "Triage a feedback blob into structured items, spawn worktrees for accepted ones. Triggers: /feedback-triage, 'triage feedback', 'rip on this'. Single bug or file review: use /feedback."
 ---
 
 # Feedback Triage

@@ -1,6 +1,6 @@
 ---
 name: slideshow
-description: "LinkedIn/IG carousel from topic/outline. HTML slides + PNGs + PDF + caption. Triggers: 'slideshow', 'carousel', 'make slides', 'deck for LinkedIn'."
+description: "LinkedIn/IG carousel from topic/outline. HTML slides + PNGs + PDF + caption. Triggers: /slideshow, 'carousel', 'make slides', 'deck for LinkedIn'."
 ---
 
 # Slideshow -- On-brand Carousel Builder

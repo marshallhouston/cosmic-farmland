@@ -1,6 +1,6 @@
 ---
 name: skill-stats
-description: "Cross-project Claude Code skill-usage report from session transcripts. Counts every Skill invocation across ~/.claude/projects (all history, real names, normalized bare-vs-namespaced), by skill / project / session / day. Use when the user says /skill-stats, 'which skills do I use', 'skill usage', 'am I using skill X', 'dead skills', 'what skills never fire', or wants to prune their skill library. Pairs with the Honeycomb 'Skill Usage' board (live trigger mix + token cost)."
+description: "Skill-usage report from session transcripts, every project, all history. Triggers: /skill-stats, 'which skills do I use', 'dead skills', 'prune my skills'."
 argument-hint: "[days] (default: all history) [skill-substring] (filter)"
 ---
 

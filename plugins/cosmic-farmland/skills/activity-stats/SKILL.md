@@ -1,6 +1,6 @@
 ---
 name: activity-stats
-description: "Generate wall-clock active work stats for the current repo by combining git commits + Claude Code session events. Produces weekly hours summary, day x 4h-bucket heatmap (HTML), and a paste-ready prompt. Use when the user says /activity-stats, 'how many hours did I work', 'activity report', 'weekly hours', 'time spent on this repo', or wants to share progress with a co-founder/cowork."
+description: "Wall-clock hours worked on this repo, from git commits + Claude session events. Triggers: /activity-stats, 'how many hours did I work', 'weekly hours', 'time spent on this repo'."
 argument-hint: "[author-substring] (default: marshall) [tz] (default: America/Denver)"
 ---
 
