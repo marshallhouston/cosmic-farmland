@@ -4,6 +4,8 @@ Marshall's cross-project skills, commands, and hooks.
 
 ## Breaking changes
 
+**4.0.0** - Split into three plugins so the always-on context cost matches how often each skill fires. `cosmic-farmland` keeps the daily dev loop and every hook. Content work (feedback pages, review docs, carousels, Granola sync) moved to `cosmic-farmland-content`; personal utilities (tee times, activity/skill stats, disk cleanup, screenshots, cf-deploy, Lovable setup) moved to `cosmic-farmland-utils`. Install those two and enable when needed: a disabled plugin costs zero tokens, but its skills cannot fire until enabled and a restart.
+
 **2.0.0** - Removed the alias commands `/ptvm`, `/ptvi`, `/prove-the-value-motherfucker`, `/prove-the-value-idea`, and the deprecated `/fart-smell-detection` shim. Every plugin command's description loads into every session, so five aliases for two skills was pure context cost. Canonical names: `/ptv`, `/fart-sniffing-detection`, `/ptv-idea`.
 
 **1.0.0** - `fart-smell-detection` skill/command renamed to `fart-sniffing-detection`. Pin to `0.5.1` if you relied on the old name.

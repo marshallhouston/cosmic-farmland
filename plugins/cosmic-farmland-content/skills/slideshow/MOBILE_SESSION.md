@@ -31,7 +31,7 @@ Brand direction (placeholder until real assets land):
 ## What shipped in commit 274f2f4
 
 ```
-plugins/cosmic-farmland/skills/slideshow/
+plugins/cosmic-farmland-content/skills/slideshow/
   SKILL.md
   templates/
     _base.css                       # all brand vars

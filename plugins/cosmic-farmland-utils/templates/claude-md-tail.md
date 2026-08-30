@@ -1,4 +1,4 @@
-<!-- lovable-setup:conventions — maintained in cosmic-farmland/templates/claude-md-tail.md, edit there -->
+<!-- lovable-setup:conventions — maintained in cosmic-farmland-utils/templates/claude-md-tail.md, edit there -->
 ## Working conventions
 
 Global rules in `~/.claude/CLAUDE.md` auto-load here, not repeated per-project.

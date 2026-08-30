@@ -1,6 +1,6 @@
 {
   "name": "cosmic-farmland",
-  "version": "3.0.0",
-  "description": "cosmic farmland's collection of skills, commands, hooks, and other randomness",
+  "version": "4.0.0",
+  "description": "Marshall's core dev loop: ship, PTV audits, what's-next, handoff, deps sweeps, plus the Stop/PreToolUse hooks that enforce house style.",
   "license": "MIT"
 }
