@@ -28,7 +28,7 @@ import sys
 import os
 from datetime import datetime, timezone
 
-from _transcript import read_last_assistant_text
+from _transcript import PATCH_ONLY, read_last_assistant_text
 
 
 # Em-dash (U+2014) and en-dash (U+2013). The hyphen-minus is fine.
@@ -99,6 +99,7 @@ def main():
             "Per marshall's house style: never use em-dashes or en-dashes. "
             "Use a hyphen (-), a comma, a colon, or split the sentence. "
             "Revise the output with no em-dash or en-dash characters."
+            + PATCH_ONLY
         ),
     }))
     return 0
