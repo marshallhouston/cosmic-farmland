@@ -1,6 +1,6 @@
 ---
 name: screenshot
-description: "Read user's newest screenshot(s) from their screenshot folder and execute the intent they give. Trigger: /screenshot, /screenshot N, /screenshot <intent>, /screenshot N <intent>."
+description: "Read the newest screenshot(s) from the screenshot folder and act on the intent given. Trigger: /screenshot [N] [intent]."
 argument-hint: "[count] [intent...]  e.g. '/screenshot', '/screenshot fix', '/screenshot 4 make infographic'"
 ---
 

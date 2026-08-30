@@ -1,6 +1,6 @@
 ---
 name: next
-description: "Answer 'what's next?' for the current repo. Reads git state, PRs, worktrees, backlog/planning docs, open issues. Use when the user says /next, 'what's next', 'what should I work on', 'what now', or opens a session and wants to resume."
+description: "What to work on next here: git state, PRs, worktrees, backlog docs, issues. Triggers: /next, 'what's next', 'what should I work on', 'what now'."
 argument-hint: "(none) — reads repo state automatically"
 ---
 

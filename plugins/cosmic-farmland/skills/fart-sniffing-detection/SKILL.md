@@ -1,6 +1,6 @@
 ---
 name: fart-sniffing-detection
-description: "PTVM audit of recent commits/PRs. Flags bloat, ranks kill candidates. Triggers: /ptv, /fart-sniffing-detection, 'is this bloat', 'prove the value', skeptical review before merge."
+description: "PTVM audit of recent commits/PRs. Flags bloat, ranks kill candidates. Triggers: /ptv, /fart-sniffing-detection, 'is this bloat', 'prove the value'."
 argument-hint: "[level] [target]  e.g. 'huff PR #42', 'sniff main..HEAD', 'dutch-oven-yourselff' (staged)"
 ---
 

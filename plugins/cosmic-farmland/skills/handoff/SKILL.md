@@ -1,6 +1,6 @@
 ---
 name: handoff
-description: "Generate self-contained resumption prompt for fresh session after /clear. Triggers: 'handoff', 'resumption prompt', 'pickup prompt', 'wrap up', 'pause here', 'prompt for new session'."
+description: "Self-contained resumption prompt for a fresh session after /clear. Triggers: /handoff, 'pickup prompt', 'resumption prompt', 'wrap up', 'pause here'."
 ---
 
 # Handoff -- Resumption Prompt Generator

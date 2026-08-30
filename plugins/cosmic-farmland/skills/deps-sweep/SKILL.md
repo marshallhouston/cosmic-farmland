@@ -1,6 +1,6 @@
 ---
 name: deps-sweep
-description: "Dependency bump workflow for any bun repo. Buckets `bun outdated` into safe-batch / majors / exact-pinned / peer-held, runs `bun audit`, opens one PR per bucket, ships each. Triggers: /deps-sweep, 'bump deps', 'what needs to be bumped', 'deps audit'."
+description: "Bump deps in a bun repo: bucket `bun outdated`, run `bun audit`, one PR per bucket. Triggers: /deps-sweep, 'bump deps', 'deps audit', 'what needs bumping'."
 ---
 
 # /deps-sweep

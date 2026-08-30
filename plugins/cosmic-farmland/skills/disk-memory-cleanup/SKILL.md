@@ -1,6 +1,6 @@
 ---
 name: disk-memory-cleanup
-description: Use when the user asks to clean up disk space, manage storage/memory, free up space, or says "/disk-memory-cleanup". Runs the automated cleanup script first, then investigates deeper for new space hogs.
+description: "Free disk space: run the cleanup script, then hunt new space hogs. Triggers: /disk-memory-cleanup, 'clean up disk space', 'free up space', 'storage'."
 version: 0.1.0
 ---
 

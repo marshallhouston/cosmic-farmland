@@ -1,6 +1,6 @@
 ---
 name: feedback
-description: "Generate a section-by-section feedback page for any content file, then apply the feedback. Use when the user says /feedback <file>, 'give me a feedback page', 'review this file', or wants to do structured section-by-section review of any markdown or text file."
+description: "Section-by-section feedback page for a content file, then apply it. Triggers: /feedback <file>, 'give me a feedback page', 'review this file'."
 argument-hint: <file-path>
 ---
 

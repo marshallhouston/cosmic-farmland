@@ -1,6 +1,6 @@
 ---
 name: cf-deploy
-description: "Provision <name>.cosmicfarmland.wtf end to end: private GitHub repo, Railway service linked with auto-deploy on push, Railway domain, Cloudflare CNAME, live verification. Triggers: /cf-deploy <name>, 'deploy it to X.cosmicfarmland.wtf', 'do the whole linking thing on railway and cloudflare'."
+description: "Provision <name>.cosmicfarmland.wtf end to end: repo, Railway service + domain, Cloudflare CNAME, live verify. Triggers: /cf-deploy <name>, 'deploy it to X.cosmicfarmland.wtf'."
 ---
 
 # cf-deploy <name>

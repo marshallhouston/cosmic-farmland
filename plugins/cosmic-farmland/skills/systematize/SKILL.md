@@ -1,6 +1,6 @@
 ---
 name: systematize
-description: "Promote lesson from memory to enforcement (hook>CI>script>doc>memory). Picks highest tier, ships artifact. Triggers: /systematize, 'make this stick', 'turn into a rule', after corrections."
+description: "Promote a lesson to enforcement (hook>CI>script>doc>memory), ships the artifact. Triggers: /systematize, 'make this stick', 'turn into a rule'."
 argument-hint: "[lesson description] -- e.g. '/systematize never commit seed files without URL verification'"
 ---
 

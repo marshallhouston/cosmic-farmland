@@ -1,6 +1,6 @@
 ---
 name: interactive-review-doc
-description: "Create interactive HTML review docs with side panel for per-section feedback, copy-to-clipboard as markdown. Triggers: 'review doc', 'feedback doc', 'interactive doc', or any structured content where user wants to iterate via copied notes."
+description: "Interactive HTML review doc with a per-section feedback panel, copyable as markdown. Triggers: /interactive-review-doc, 'review doc', 'feedback doc'."
 ---
 
 # Interactive Review Document Skill
