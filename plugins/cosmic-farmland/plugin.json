@@ -1,6 +1,6 @@
 {
   "name": "cosmic-farmland",
-  "version": "4.0.0",
+  "version": "4.0.1",
   "description": "Marshall's core dev loop: ship, PTV audits, what's-next, handoff, deps sweeps, plus the Stop/PreToolUse hooks that enforce house style.",
   "license": "MIT"
 }

@@ -2,13 +2,15 @@
 
 > **Warning:** This isn't ready for primetime and should not be relied on for stability. I will change and break these unexpectedly.
 
-Cross-project scripts and a Claude Code plugin for my dev workflow.
+Cross-project scripts and Claude Code plugins for my dev workflow.
 
 - `bin/` -- standalone shell scripts (e.g. `lovable-setup`: de-brand + configure a fresh
   Lovable export -- tests, deps, tokensave, GitHub + Railway; `bun`: a compatibility shim
   that fixes `bun run`/bunx git hooks under lapdog's injected `BUN_OPTIONS=--preload`).
   Symlink them onto PATH with `bash bin/install.sh`.
-- `plugins/cosmic-farmland/` — Claude Code plugin with skills, commands, and hooks
+- `plugins/cosmic-farmland/` - core dev loop: ship, PTV audits, what's-next, handoff, deps sweeps, plus the Stop/PreToolUse hooks that enforce house style
+- `plugins/cosmic-farmland-content/` - content and review workflows: feedback pages, interactive review docs, carousels, Granola sync. Enable when writing, not while coding
+- `plugins/cosmic-farmland-utils/` - personal utilities: tee times, activity/skill stats, disk cleanup, screenshots, cosmicfarmland.wtf deploys, Lovable setup. Enable on demand
 - `plugins/obsidian-weaver/` — Claude Code plugin: Obsidian vault interface + auto-weaving knowledge graph
 
 ## Install
@@ -18,13 +20,25 @@ In Claude Code:
 ```
 /plugin marketplace add marshallhouston/cosmic-farmland
 /plugin install cosmic-farmland@cosmic-farmland
+/plugin install cosmic-farmland-content@cosmic-farmland
+/plugin install cosmic-farmland-utils@cosmic-farmland
 /plugin install obsidian-weaver@cosmic-farmland
 /reload-plugins
 ```
 
-Install whichever you want. See each plugin's README for usage:
+Install whichever you want; they're independent. `cosmic-farmland` is the always-on core.
+Content and utils are split out so you can enable them only when you need them:
+
+```
+/plugin enable cosmic-farmland-content@cosmic-farmland
+/plugin disable cosmic-farmland-content@cosmic-farmland
+```
+
+See each plugin's README for usage:
 
 - [plugins/cosmic-farmland/README.md](plugins/cosmic-farmland/README.md)
+- [plugins/cosmic-farmland-content/README.md](plugins/cosmic-farmland-content/README.md)
+- [plugins/cosmic-farmland-utils/README.md](plugins/cosmic-farmland-utils/README.md)
 - [plugins/obsidian-weaver/README.md](plugins/obsidian-weaver/README.md)
 
 ## Development

@@ -1,6 +1,6 @@
 {
   "name": "cosmic-farmland-utils",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Personal utilities: golf tee times, activity and skill stats, disk cleanup, screenshots, cosmicfarmland.wtf deploys, Lovable scaffold setup.",
   "license": "MIT"
 }

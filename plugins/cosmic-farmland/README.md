@@ -20,28 +20,33 @@ In Claude Code:
 /reload-plugins
 ```
 
+Sibling plugins are installed separately: `cosmic-farmland-content`, `cosmic-farmland-utils`, `obsidian-weaver`.
+
 ## Contents
 
 **Skills**
 
-- `disk-memory-cleanup` — free disk space (Xcode caches, node_modules, etc.)
-- `fart-sniffing-detection` — PTVM ("Prove The Value Motherfucker") audit of recent commits or a PR. Flags cologne-sniffing changes, ranks kill candidates. Four skepticism levels: `whiff` → `sniff` → `huff` → `dutch-oven-yourselff`.
-- `ptv-idea` — same PTVM rubric applied to a *proposal* before code exists. Six-dimension audit (premise, value, complexity, alternatives, reversibility, scope creep), verdicts BUILD/TRIM/DEFER/KILL, always names the Smallest Version That Proves The Premise. Same four skepticism levels.
-- `feedback` — section-by-section review loop
-- `feedback-triage` — intake a raw feedback blob from a named source, triage each item (category/tier/size/decision), write a dated doc, propose worktrees for accepted items
-- `golf-tee-times` — check tee time availability
-- `handoff` — generate self-contained session handoff
-- `interactive-review-doc` — create interactive HTML review docs
-- `screenshot` — reads your newest screenshot(s) (up to 10) and executes the intent you give after the count. `/screenshot` explains newest. `/screenshot fix` debugs an error in the image and edits code. `/screenshot 3 make infographic` reads last 3 and produces an infographic. `/screenshot do this` remixes the pattern in the image toward your goals. Folder auto-resolves via `defaults read com.apple.screencapture location` (macOS); override with `SCREENSHOT_DIR=/path`. Capture-then-invoke only; does not take screenshots for you.
+- `deps-sweep` - bump deps in a bun repo: bucket `bun outdated`, run `bun audit`, one PR per bucket
+- `fart-sniffing-detection` - PTVM ("Prove The Value Motherfucker") audit of recent commits or a PR. Flags cologne-sniffing changes, ranks kill candidates. Four skepticism levels: `whiff` → `sniff` → `huff` → `dutch-oven-yourselff`.
+- `feedback-triage` - intake a raw feedback blob from a named source, triage each item (category/tier/size/decision), write a dated doc, propose worktrees for accepted items
+- `handoff` - generate self-contained session handoff
+- `next` - what to work on next here: git state, PRs, worktrees, backlog docs, issues
+- `ptv-idea` - same PTVM rubric applied to a *proposal* before code exists. Six-dimension audit (premise, value, complexity, alternatives, reversibility, scope creep), verdicts BUILD/TRIM/DEFER/KILL, always names the Smallest Version That Proves The Premise. Same four skepticism levels.
+- `systematize` - promote a lesson to enforcement (hook > CI > script > doc > memory) and ship the artifact
 
 **Commands**
 
-- `/execute-plan` — execute a written plan
-- `/fart-sniffing-detection [level] [target]` — run the skill above. Target = PR number, git range, `--staged`, or auto-detect current branch's open PR.
-- `/ptv-idea [level] <idea>` — PTVM-audit a proposal before code exists (idea text, path to a spec doc, or `last turn`).
-- `/feedback-triage <source>` — triage a pasted feedback blob from a named source (runs the `feedback-triage` skill)
-- `/granola-sync` — sync recent Granola meetings
-- `/ship [pr-number]` — watch a PR's checks, merge when green, clean up worktree + local branch. Defaults to current branch's PR.
+- `/execute-plan` - execute a written plan
+- `/ptv [level] [target]` - run `fart-sniffing-detection`. Target = PR number, git range, `--staged`, or auto-detect current branch's open PR.
+- `/ship [pr-number]` - watch a PR's checks, merge when green, clean up worktree + local branch. Defaults to current branch's PR.
+- `/ship-all` - list open PRs and drain them through `/ship` in sequence
+- `/wrap [pr-number]` - end-of-session cap: ship the current PR (or skip if none), then write a resumption prompt
+
+**Hooks** (Stop / PreToolUse, always on)
+
+- `no-em-dashes`, `no-time-estimates`, `no-reasking`, `no-drift`, `no-asking-tool`, `enforce-worktree`
+
+Skills that used to live here now ship in the sibling plugins. See [cosmic-farmland-content](../cosmic-farmland-content) and [cosmic-farmland-utils](../cosmic-farmland-utils).
 
 ## Short-name resolution (`/ptv` returning "Unknown command")
 
