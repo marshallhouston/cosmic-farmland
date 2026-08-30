@@ -54,9 +54,9 @@ Claude Code resolves plugin commands under their namespaced form: `/cosmic-farml
 
 Two ways to use bare names:
 
-1. **Use the namespaced form** — `/cosmic-farmland:ptv huff`. Always works.
-2. **Install a shadow** — copy the plugin command file to `~/.claude/commands/`:
+1. **Use the namespaced form**: `/cosmic-farmland:ptv huff`. Always works.
+2. **Install a shadow**: copy the plugin command file to `~/.claude/commands/`:
    ```
    cp ~/.claude/plugins/cache/cosmic-farmland/cosmic-farmland/*/commands/ptv.md ~/.claude/commands/ptv.md
    ```
-   Then `/reload-plugins`. Shadow is machine-local (not tracked in this repo) and must be re-copied per machine. Shadows drift from the plugin over time — prefer the namespaced form unless muscle memory demands otherwise.
+   Then `/reload-plugins`. Shadow is machine-local (not tracked in this repo) and must be re-copied per machine. Shadows drift from the plugin over time, prefer the namespaced form unless muscle memory demands otherwise.

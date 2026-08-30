@@ -11,7 +11,7 @@ Cross-project scripts and Claude Code plugins for my dev workflow.
 - `plugins/cosmic-farmland/` - core dev loop: ship, PTV audits, what's-next, handoff, deps sweeps, plus the Stop/PreToolUse hooks that enforce house style
 - `plugins/cosmic-farmland-content/` - content and review workflows: feedback pages, interactive review docs, carousels, Granola sync. Enable when writing, not while coding
 - `plugins/cosmic-farmland-utils/` - personal utilities: tee times, activity/skill stats, disk cleanup, screenshots, cosmicfarmland.wtf deploys, Lovable setup. Enable on demand
-- `plugins/obsidian-weaver/` — Claude Code plugin: Obsidian vault interface + auto-weaving knowledge graph
+- `plugins/obsidian-weaver/`: Claude Code plugin: Obsidian vault interface + auto-weaving knowledge graph
 
 ## Install
 
