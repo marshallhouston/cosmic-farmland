@@ -14,8 +14,20 @@
     },
     {
       "name": "obsidian-weaver",
-      "description": "Claude Code as the interface to your Obsidian vault. Daily notes, captures, and an auto-maintained knowledge graph that weaves connections between your notes as you write them. Vault-agnostic — set OBSIDIAN_VAULT and run /obsidian-setup.",
+      "description": "Claude Code as the interface to your Obsidian vault. Daily notes, captures, and an auto-maintained knowledge graph that weaves connections between your notes as you write them. Vault-agnostic \u2014 set OBSIDIAN_VAULT and run /obsidian-setup.",
       "source": "./plugins/obsidian-weaver",
+      "category": "productivity"
+    },
+    {
+      "name": "cosmic-farmland-content",
+      "description": "Content and review workflows: feedback pages, interactive review docs, carousels, Granola sync. Enable when writing, not while coding.",
+      "source": "./plugins/cosmic-farmland-content",
+      "category": "productivity"
+    },
+    {
+      "name": "cosmic-farmland-utils",
+      "description": "Personal utilities: tee times, activity/skill stats, disk cleanup, screenshots, cosmicfarmland.wtf deploys, Lovable setup. Enable on demand.",
+      "source": "./plugins/cosmic-farmland-utils",
       "category": "productivity"
     }
   ]
