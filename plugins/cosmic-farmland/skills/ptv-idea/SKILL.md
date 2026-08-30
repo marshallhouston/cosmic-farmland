@@ -1,6 +1,6 @@
 ---
 name: ptv-idea
-description: "PTVM audit of an idea/proposal/plan BEFORE diff. Triggers: /ptv-idea, /ptvi, 'is this worth building', 'audit this proposal', 'sanity-check this plan'."
+description: "PTVM audit of an idea/proposal/plan BEFORE diff. Triggers: /ptv-idea, 'is this worth building', 'audit this proposal', 'sanity-check this plan'."
 argument-hint: "[level] <idea text | path to spec | 'last turn'>  e.g. 'huff add dark mode toggle', 'sniff docs/SMOKE_LEDGER_PLAN.md'"
 ---
 
@@ -11,8 +11,6 @@ Same PTVM bar as `fart-sniffing-detection`, applied to an idea before code exist
 ## When to use
 
 - `/ptv-idea [level] <idea>`
-- `/ptvi [level] <idea>` -- alias
-- `/prove-the-value-idea [level] <idea>` -- alias
 - "is this idea worth building?"
 - "PTV this proposal / spec / plan"
 - "sanity-check this before I write code"

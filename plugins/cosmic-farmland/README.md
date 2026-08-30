@@ -4,9 +4,9 @@ Marshall's cross-project skills, commands, and hooks.
 
 ## Breaking changes
 
-**1.0.0** — `fart-smell-detection` skill/command renamed to `fart-sniffing-detection`. Pin to `0.5.1` if you relied on the old name.
+**2.0.0** - Removed the alias commands `/ptvm`, `/ptvi`, `/prove-the-value-motherfucker`, `/prove-the-value-idea`, and the deprecated `/fart-smell-detection` shim. Every plugin command's description loads into every session, so five aliases for two skills was pure context cost. Canonical names: `/ptv`, `/fart-sniffing-detection`, `/ptv-idea`.
 
-Transition: `/fart-smell-detection` still works as a deprecated shim that forwards to the new skill and prints a rename notice. Shim will be removed in `2.0.0` — update scripts/muscle memory before then. Aliases `/ptv`, `/ptvm`, `/prove-the-value-motherfucker` unchanged.
+**1.0.0** - `fart-smell-detection` skill/command renamed to `fart-sniffing-detection`. Pin to `0.5.1` if you relied on the old name.
 
 ## Install
 
@@ -35,15 +35,15 @@ In Claude Code:
 **Commands**
 
 - `/execute-plan` — execute a written plan
-- `/fart-sniffing-detection [level] [target]` — run the skill above. Target = PR number, git range, `--staged`, or auto-detect current branch's open PR. Aliases: `/ptvm`, `/prove-the-value-motherfucker`.
-- `/ptv-idea [level] <idea>` — PTVM-audit a proposal before code exists (idea text, path to a spec doc, or `last turn`). Aliases: `/ptvi`, `/prove-the-value-idea`.
+- `/fart-sniffing-detection [level] [target]` — run the skill above. Target = PR number, git range, `--staged`, or auto-detect current branch's open PR.
+- `/ptv-idea [level] <idea>` — PTVM-audit a proposal before code exists (idea text, path to a spec doc, or `last turn`).
 - `/feedback-triage <source>` — triage a pasted feedback blob from a named source (runs the `feedback-triage` skill)
 - `/granola-sync` — sync recent Granola meetings
 - `/ship [pr-number]` — watch a PR's checks, merge when green, clean up worktree + local branch. Defaults to current branch's PR.
 
 ## Short-name resolution (`/ptv` returning "Unknown command")
 
-Claude Code resolves plugin commands under their namespaced form: `/cosmic-farmland:<name>`. The bare form (`/ptv`, `/next`, etc.) only resolves if a matching file exists in `~/.claude/commands/` as a **user-global shadow**. No shadow → bare name errors with "Unknown command: /ptv. Did you mean /ptvm?" even after `/plugin update` and `/reload-plugins`.
+Claude Code resolves plugin commands under their namespaced form: `/cosmic-farmland:<name>`. The bare form (`/ptv`, `/next`, etc.) only resolves if a matching file exists in `~/.claude/commands/` as a **user-global shadow**. No shadow → bare name errors with "Unknown command: /ptv." even after `/plugin update` and `/reload-plugins`.
 
 Two ways to use bare names:
 
