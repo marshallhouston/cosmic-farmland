@@ -2,7 +2,8 @@
 # ship-verify-deploy.sh -- verify a Railway prod deploy after a PR merge.
 #
 # Usage: ship-verify-deploy.sh <pr-number> <service-name> [health-url]
-# No-op (exit 0) if the repo has no railway.json. Run in BACKGROUND; report the
+# No-op (exit 0) if the repo has no Railway config (railway.json/.toml or
+# .railway/railway.{ts,py,go}). Run in BACKGROUND; report the
 # final deploy line as a follow-up message.
 #
 # Why this exists: a green PR check != a successful prod deploy. PR-preview and
@@ -22,7 +23,18 @@ HEALTH_URL="${3:-}"
 # /ship run may be a preview env, silently probing the wrong deploys.
 ENVIRONMENT="${4:-production}"
 
-[ -f railway.json ] || { echo "no railway.json -- skipping prod-verify"; exit 0; }
+# Railway-managed? Config as Code (railway.json/.toml, deprecated, hard cutoff
+# 2026-12-01) OR Infrastructure as Code (.railway/railway.ts|py|go). Gating on
+# railway.json alone silently turned prod-verify OFF for any repo that had
+# migrated to IaC -- the exact repos still deploying to Railway.
+_railway_managed() {
+  for f in railway.json railway.toml \
+           .railway/railway.ts .railway/railway.py .railway/railway.go; do
+    [ -f "$f" ] && return 0
+  done
+  return 1
+}
+_railway_managed || { echo "no railway config (railway.json / .railway/railway.*) -- skipping prod-verify"; exit 0; }
 
 # Portable per-call timeout as a FUNCTION (not a string var): `$VAR cmd` splits
 # on whitespace but does not re-process quotes, so a perl fallback string would
