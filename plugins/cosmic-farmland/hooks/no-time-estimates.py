@@ -5,6 +5,11 @@ Per marshall's CLAUDE.md "Marshall voice + product discipline rules":
   No time estimates. Never estimate duration in days/weeks. Describe
   scope, complexity, and decomposition options instead.
 
+Scope of the rule: FORWARD-LOOKING scoping only. "this will take 2 days"
+says nothing about complexity, so it is banned. Reporting how long something
+already took or how long ago it happened ("the build ran in 70s", "data is
+stale by 2 days") is measurement, not an estimate, and is allowed.
+
 Calibration: model drifts toward "this takes 10 min" / "2-4 weeks" framing
 even when the rule is in the system prompt. Hook closes the loop post-hoc.
 
@@ -30,9 +35,12 @@ from _transcript import PATCH_ONLY, read_last_assistant_text
 # Time-duration unit patterns. Matches "10 min", "2-4 weeks", "1.5 hours", etc.
 # Requires a digit immediately before the unit (with optional whitespace,
 # range hyphen, or decimal). Word-boundary at both ends.
+# Bare "s" is deliberately NOT a unit: "all 200s" (HTTP status codes) and
+# "the 90s" are plural-of-number, not durations, and no one scopes work in
+# bare seconds. "sec"/"secs"/"second(s)" still match.
 TIME_PATTERN = re.compile(
     r"\b\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?\s*"
-    r"(?:s|sec|secs|second|seconds|"
+    r"(?:sec|secs|second|seconds|"
     r"min|mins|minute|minutes|"
     r"hr|hrs|hour|hours|"
     r"day|days|"
@@ -125,6 +133,13 @@ CONTEXT_WHITELIST = [
     "deployed in",    # "deployed in 70s"
     "deploy in",      # "deploy in 70s"
     "booted in",      # "booted in 4s"
+    # Elapsed / staleness readings -- describing the past, not predicting.
+    "stale",          # "data is stale by 2 days"
+    "since",          # "nothing since 2 days back"
+    "old",            # "the snapshot is 3 days old"
+    "behind",         # "the branch is 2 weeks behind"
+    "no deploy in",   # "no deploy in 7 days"
+    "not advanced",
     # Code / config constants referenced by value, not estimated.
     "dwell",          # "20s dwell gate" -- READ_DWELL_MS constant
     "timeout",        # "30s timeout"
@@ -193,12 +208,50 @@ def main():
             "no time estimates. Never estimate duration in seconds/minutes/hours/days/weeks/months. "
             "Describe scope, complexity, and decomposition options instead "
             "(e.g. 'Low complexity: single edit + test' rather than '5 minutes'). "
-            "Revise the output without numeric time units."
+            "This applies to FORWARD-LOOKING scoping only -- reporting how long "
+            "something already took, or how long ago it happened, is measurement "
+            "and is fine. If the flagged phrase is a measurement, rephrase it so "
+            "the past-tense framing is explicit rather than deleting the fact."
             + PATCH_ONLY
         ),
     }))
     return 0
 
 
+def _violations(text: str):
+    scrubbed = strip_safe_zones(text)
+    return [
+        m.group(0)
+        for m in TIME_PATTERN.finditer(scrubbed)
+        if not is_data_context(scrubbed, m.start(), m.end())
+    ]
+
+
+def selftest():
+    """Forward-looking estimates fire; measurements do not."""
+    should_fire = [
+        "This will take 2 days.",
+        "Roughly 3-4 weeks of work.",
+        "Give it 30 minutes.",
+    ]
+    should_pass = [
+        "All 200s.",                       # HTTP status codes, not seconds
+        "The build ran in 70 seconds.",
+        "Data is stale by 2 days.",
+        "No deploy in 7 days.",
+        "The snapshot is 3 days old.",
+        "Merged 2 weeks ago.",
+        "The branch is 2 weeks behind.",
+    ]
+    for t in should_fire:
+        assert _violations(t), f"expected a hit: {t!r}"
+    for t in should_pass:
+        assert not _violations(t), f"false positive: {t!r} -> {_violations(t)}"
+    print("selftest ok")
+
+
 if __name__ == "__main__":
+    if "--selftest" in sys.argv:
+        selftest()
+        sys.exit(0)
     sys.exit(main())
