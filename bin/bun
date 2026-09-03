@@ -38,12 +38,17 @@ fi
 case "$1" in
   install|i|add|a|remove|rm|x|pm|update|outdated|link|unlink|create|c|init|upgrade|audit|info|why)
     unset BUN_OPTIONS ;;
-  run)
+  run|test)
+    # `test` takes --preload exactly like `run`, and hits the same misparse:
+    # bun reads a leading --preload as run-mode, then fails with
+    # `Script not found "test"`. Same fix, re-injected after the subcommand.
+    # (broke `bun test` in every repo whenever BUN_OPTIONS was set 2026-09-03.)
     if [ -n "$BUN_OPTIONS" ]; then
+      sub="$1"
       opts="$BUN_OPTIONS"
       unset BUN_OPTIONS
       shift
-      exec "$REAL" run $opts "$@"
+      exec "$REAL" "$sub" $opts "$@"
     fi ;;
 esac
 exec "$REAL" "$@"
