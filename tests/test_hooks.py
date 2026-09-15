@@ -162,6 +162,47 @@ class TestTimeEstimates(HookTestCase):
                 self.assertFalse(is_block(out), f"expected no block for {text!r}, got {out!r}")
 
 
+
+# --- no-slop-phrases.py (Stop) ---------------------------------------------
+
+class TestSlopPhrases(HookTestCase):
+    def test_blocks(self):
+        for text in [
+            "The cost is stark. You lost four shots there.",
+            "Off the tee the numbers are blunt: 33% fairways.",
+            "The honest part: you are not playing well.",
+            "That putt really moved the needle.",
+            "175 is where the wheels come off.",
+            "Speed is the single highest-leverage thing to rehearse.",
+            "It is worth noting that the driver grades best.",
+            "This is the single biggest producer of big numbers.",
+            "At the end of the day it is the double bogeys.",
+            "Let me delve into the scoring record.",
+            # "actually" is caught on density, not presence
+            "It actually was actually true that you actually lost strokes actually.",
+        ]:
+            with self.subTest(text=text):
+                rc, out = run_hook("no-slop-phrases.py", stop_payload(self.home, text), self.home)
+                self.assertEqual(rc, 0)
+                self.assertTrue(is_block(out), f"expected block for {text!r}, got {out!r}")
+
+    def test_allows(self):
+        for text in [
+            "Preparing for the 2026 tournament with a deep dive on 6 rounds.",   # marshall uses "deep dive"
+            "You are not losing this course with the driver. You are losing it with a wedge.",
+            "Speed on the long ones, more than line.",                           # the desired framing
+            "Driver median 285, 33% fairways, +9.5 strokes gained.",             # plain data
+            "Use the card for planning and the numbers for what actually happened.",  # one "actually" is fine
+            'Cut: "the cost is stark" and "moved the needle".',                # citation, not authoring
+            "```\nthe cost is stark\n```",                                      # code fence stripped
+            "> the honest part: quoted from elsewhere",                          # blockquote stripped
+            "The `highest-leverage` identifier in the code.",                    # inline code stripped
+        ]:
+            with self.subTest(text=text):
+                rc, out = run_hook("no-slop-phrases.py", stop_payload(self.home, text), self.home)
+                self.assertEqual(rc, 0)
+                self.assertFalse(is_block(out), f"expected no block for {text!r}, got {out!r}")
+
 # --- no-drift.py (Stop) — warn-only, must never block ----------------------
 
 class TestDrift(HookTestCase):
