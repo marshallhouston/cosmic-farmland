@@ -115,10 +115,12 @@ fi
 # false-skipping the verify before the deploy ever registered (why: 2026-06-17 --
 # /ship reported "timed out or returned empty" while the deploy was building fine).
 # Tolerate empties: keep polling through the 600s window, only giving up after
-# EMPTY_GRACE consecutive empties (~1 min) with no deploy row ever seen -- that
+# EMPTY_GRACE consecutive empties (~3 min) with no deploy row ever seen -- that
 # distinguishes "deploy not registered yet" (retry) from "wrong service/env or
 # persistently broken CLI" (give up without burning the full 10 min).
-EMPTY_GRACE=6
+# 18 x 10s = 180s. Railway registered a /ship-all merge-train deploy 79s after the
+# first merge (2026-09-15, issue #60); the old 60s ceiling quit before it appeared.
+EMPTY_GRACE=18
 empties=0
 START=$SECONDS
 while [ $((SECONDS - START)) -lt 600 ]; do
