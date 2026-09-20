@@ -1,0 +1,73 @@
+#!/usr/bin/env python3
+"""Load Claude Code transcripts into a running lapdog.
+
+Lapdog keeps spans in RAM only, so a restart loses everything. The transcripts
+under ~/.claude/projects are the durable source; this replays them. The
+/claude/hooks/backfill_session endpoint skips sessions it already holds, so
+re-running is free.
+
+  lapdog-backfill [--days N] [--port P]
+"""
+import argparse
+import json
+import pathlib
+import sys
+import time
+import urllib.error
+import urllib.request
+
+p = argparse.ArgumentParser()
+p.add_argument("--days", type=int, default=30)
+p.add_argument("--port", type=int, default=8126)
+args = p.parse_args()
+
+url = f"http://localhost:{args.port}/claude/hooks/backfill_session"
+cutoff = time.time() - args.days * 86400
+root = pathlib.Path.home() / ".claude" / "projects"
+
+files = sorted(
+    (f for f in root.glob("*/*.jsonl") if f.stat().st_mtime >= cutoff),
+    key=lambda f: f.stat().st_mtime,
+)
+print(f"{len(files)} transcripts in the last {args.days} days")
+
+spans = skipped = failed = 0
+for f in files:
+    entries = [json.loads(ln) for ln in f.read_text().splitlines() if ln.strip()]
+    if not entries:
+        continue
+    # Claude writes subagent turns to <session-id>/subagents/agent-*.jsonl;
+    # lapdog nests them under the Task span that launched them.
+    subagents = [
+        [json.loads(ln) for ln in sub.read_text().splitlines() if ln.strip()]
+        for sub in sorted((f.parent / f.stem / "subagents").glob("agent-*.jsonl"))
+    ]
+    body = json.dumps(
+        {
+            "session_id": f.stem,
+            "cwd": entries[0].get("cwd") or "",
+            "entries": entries,
+            "subagents": subagents,
+        }
+    ).encode()
+    req = urllib.request.Request(url, body, {"Content-Type": "application/json"})
+    try:
+        res = json.load(urllib.request.urlopen(req, timeout=300))
+    except urllib.error.HTTPError as e:
+        # One malformed transcript shouldn't stop the replay.
+        failed += 1
+        print(f"  FAIL {f.stem[:8]} {e.code} {e.read()[:200].decode()}", file=sys.stderr)
+        continue
+    except urllib.error.URLError as e:
+        print(f"  lapdog unreachable on :{args.port} ({e.reason})", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        failed += 1
+        print(f"  FAIL {f.stem[:8]} {e}", file=sys.stderr)
+        continue
+    if res.get("status") == "skipped":
+        skipped += 1
+    else:
+        spans += res.get("spans_created", 0)
+
+print(f"{spans:,} spans loaded, {skipped} already present, {failed} failed")
