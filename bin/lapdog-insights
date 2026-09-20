@@ -1,0 +1,169 @@
+#!/usr/bin/env python3
+"""Ranked insights from lapdog's span corpus.
+
+Pairs with lapdog-backfill: backfill loads the transcripts, this reads what
+they add up to. Answers the questions the transcripts alone can't -- where
+token spend goes, what the baseline context tax is, which sessions cost what,
+where wall clock went -- since only lapdog carries per-call token accounting
+and timing. Tool n-grams and slash-command sequences are cc-pattern-mine's
+job, not this one's.
+
+  lapdog-insights [--port P] [--top N]
+"""
+import argparse
+import collections
+import json
+import statistics
+import sys
+import urllib.error
+import urllib.request
+
+p = argparse.ArgumentParser()
+p.add_argument("--port", type=int, default=8126)
+p.add_argument("--top", type=int, default=8)
+args = p.parse_args()
+
+try:
+    with urllib.request.urlopen(f"http://localhost:{args.port}/claude/hooks/spans", timeout=300) as r:
+        spans = json.load(r)["spans"]
+except urllib.error.URLError as e:
+    sys.exit(f"lapdog unreachable on :{args.port} ({e.reason}) -- is it running?")
+
+if not spans:
+    sys.exit("no spans; run lapdog-backfill first")
+
+
+def kind(s):
+    return s["meta"].get("span", {}).get("kind")
+
+
+def m(s, f):
+    return int(s.get("metrics", {}).get(f, 0) or 0)
+
+
+# A claude-code-request span is an agent roll-up: its metrics re-sum every
+# child LLM call. Counting both double-counts roughly 2x.
+llm = [s for s in spans if kind(s) == "llm" and m(s, "total_tokens")]
+tools = [s for s in spans if kind(s) == "tool"]
+
+
+def h(title):
+    print(f"\n{'=' * 64}\n{title}\n{'=' * 64}")
+
+
+sessions = {s["session_id"] for s in spans}
+h(f"CORPUS  {len(spans):,} spans | {len(sessions)} sessions | {len(llm):,} LLM calls")
+
+# --- spend ---------------------------------------------------------------
+# Relative list-price weights: cache read .1x input, cache write 1.25x,
+# output 5x. Lapdog's own cost fields are unusable (unknown models score
+# $0.00, known ones overflow into the billions), so weight tokens directly.
+tot = collections.Counter()
+for s in llm:
+    for f, v in s.get("metrics", {}).items():
+        if "token" in f:
+            tot[f] += int(v or 0)
+parts = {
+    "cache read": tot["cache_read_input_tokens"] * 0.1,
+    "cache write": tot["cache_write_input_tokens"] * 1.25,
+    "uncached in": tot["non_cached_input_tokens"] * 1.0,
+    "output": tot["output_tokens"] * 5.0,
+}
+weighted = sum(parts.values()) or 1
+cached = tot["cache_read_input_tokens"]
+served = cached + tot["cache_write_input_tokens"] + tot["non_cached_input_tokens"]
+
+h("SPEND  where the money goes")
+print(f"  {tot['total_tokens']:,} tokens, cache hit {cached / max(served, 1) * 100:.1f}%")
+for k, v in sorted(parts.items(), key=lambda x: -x[1]):
+    print(f"  {k:12} {v / weighted * 100:5.1f}%  ({v:,.0f} weighted units)")
+print("  -> input context dominates; the lever is context SIZE, not hit rate")
+
+# --- baseline tax --------------------------------------------------------
+by = collections.defaultdict(list)
+for s in llm:
+    by[s["session_id"]].append(s)
+floors = []
+for v in by.values():
+    c = [m(s, "input_tokens") for s in v if m(s, "input_tokens")]
+    if len(c) >= 3:
+        floors.append(min(c))
+if floors:
+    med = statistics.median(floors)
+    h("BASELINE CONTEXT TAX  paid on every single turn")
+    print(f"  floor per session: med {med:,.0f}  p10 {sorted(floors)[len(floors) // 10]:,}"
+          f"  p90 {sorted(floors)[9 * len(floors) // 10]:,}")
+    print(f"  {med:,.0f} x {len(llm):,} calls = {med * len(llm) / 1e6:,.0f}M tokens before any work")
+    print("  made of: system prompt + MCP tool defs + CLAUDE.md + skills index")
+    print("  -> trimming it multiplies across every turn of every session")
+
+# --- sessions ------------------------------------------------------------
+h(f"COST BY SESSION  top {args.top}")
+rows = []
+for k, v in by.items():
+    c = [m(s, "input_tokens") for s in v if m(s, "input_tokens")]
+    w = sum(m(s, "cache_read_input_tokens") * 0.1 + m(s, "cache_write_input_tokens") * 1.25
+            + m(s, "non_cached_input_tokens") + m(s, "output_tokens") * 5.0 for s in v)
+    rows.append((w, len(v), min(c) if c else 0, max(c) if c else 0, k))
+rows.sort(reverse=True)
+print(f"  {'session':10} {'calls':>6} {'ctx floor':>11} {'ctx peak':>11} {'% of spend':>11}")
+for w, n, lo, hi, k in rows[: args.top]:
+    print(f"  {k[:8]:10} {n:6} {lo:11,} {hi:11,} {w / weighted * 100:10.1f}%")
+print(f"  top {args.top} = {sum(r[0] for r in rows[:args.top]) / weighted * 100:.0f}% of all spend")
+
+# --- models --------------------------------------------------------------
+h("MODEL MIX")
+mt = collections.Counter()
+mc = collections.Counter()
+for s in llm:
+    name = s["meta"].get("model_name", "?")
+    mc[name] += 1
+    mt[name] += m(s, "total_tokens")
+for name, c in mc.most_common():
+    print(f"  {name:26} {c:6,} calls  {mt[name]:>16,} tokens")
+
+# --- wall clock ----------------------------------------------------------
+h("WALL CLOCK  slowest tool calls")
+td = collections.defaultdict(list)
+for s in tools:
+    td[s["name"].split(" - ")[0]].append(s["duration"] / 1e9)
+print(f"  {'tool':32} {'calls':>6} {'med':>8} {'total':>10}")
+for t, d in sorted(td.items(), key=lambda x: -sum(x[1]))[: args.top]:
+    print(f"  {t[:32]:32} {len(d):6} {statistics.median(d):7.2f}s {sum(d):9.0f}s")
+
+# --- bash shape ----------------------------------------------------------
+def cmd(s):
+    i = s["meta"].get("input", {})
+    v = i.get("value") if isinstance(i, dict) else None
+    if isinstance(v, str):
+        try:
+            v = json.loads(v)
+        except Exception:
+            return v
+    return v.get("command", "") if isinstance(v, dict) else ""
+
+
+bash = [s for s in tools if s["name"].startswith("Bash")]
+if bash:
+    cmds = [(cmd(s), s["duration"] / 1e9) for s in bash]
+    polls = [(c, d) for c, d in cmds if ("sleep " in c and ("until " in c or "while " in c))
+             or ("for i in $(seq" in c and "sleep" in c)]
+    h("BASH SHAPE")
+    print(f"  {len(bash):,} Bash calls, {sum(d for _, d in cmds):,.0f}s total")
+    print(f"  `cd ` appears in {sum('cd ' in c for c, _ in cmds):,} (cwd does not persist between calls)")
+    if polls:
+        print(f"  {len(polls)} blocking poll loops burning {sum(d for _, d in polls):,.0f}s"
+              f" -- these belong in Monitor / run_in_background")
+        for c, d in sorted(polls, key=lambda x: -x[1])[:3]:
+            print(f"    {d:6.0f}s  {c[:70]}")
+
+# --- errors --------------------------------------------------------------
+errs = [s for s in spans if s["status"] == "error"]
+if errs:
+    h(f"ERRORS  {len(errs)} spans ({len(errs) / max(len(tools), 1) * 100:.1f}% of tool calls)")
+    sig = collections.Counter()
+    for s in errs:
+        msg = (s["meta"].get("error") or {}).get("message", "")
+        sig[" ".join(msg.split())[:70] or "(no message)"] += 1
+    for k, v in sig.most_common(args.top):
+        print(f"  {v:4}  {k}")
