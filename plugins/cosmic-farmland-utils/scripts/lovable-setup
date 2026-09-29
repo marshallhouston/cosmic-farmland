@@ -93,23 +93,6 @@ info "Writing .railwayignore..."
 } > .railwayignore
 ok ".railwayignore written"
 
-# ── 3b. railway.json — pin build/start so no dashboard step is needed ─
-# Docker shapes start from the Dockerfile CMD; SPA + SSR both `bun run start`.
-if [ "$SHAPE" != docker ] && [ ! -f railway.json ] && [ ! -f railway.toml ]; then
-  cat > railway.json << 'RAILWAY'
-{
-  "$schema": "https://railway.com/railway.schema.json",
-  "build": { "buildCommand": "bun run build" },
-  "deploy": { "startCommand": "bun run start" }
-}
-RAILWAY
-  ok "railway.json written (build + start pinned — no dashboard start-command step)"
-elif [ "$SHAPE" = docker ]; then
-  ok "Docker shape — start comes from the Dockerfile, no railway.json needed"
-else
-  ok "railway.json/.toml already present — left in place"
-fi
-
 # ── 4. De-brand: strip Lovable editor hooks + branding ────────────────
 info "Stripping Lovable branding..."
 STRIPPED=0
@@ -258,6 +241,8 @@ fi
 info "Installing dependencies (bun)..."
 rm -rf node_modules
 bun install 2>&1 | tail -3
+# `railway` npm package: `railway config plan|apply` imports railway/iac from .railway/railway.ts
+grep -q '"railway"' package.json || bun add -d railway >/dev/null 2>&1 || warn "bun add -d railway failed — needed for railway config apply"
 ok "Dependencies installed"
 
 # ── 8. Tests — Vitest + Testing Library (Lovable ships none) ──────────
@@ -573,9 +558,25 @@ if brew_offer railway railway "deploy to Railway"; then
   if railway status >/dev/null 2>&1; then
     ok "Railway project already linked — skipping create"
   elif [ "${LOVABLE_SETUP_RAILWAY:-}" = "1" ] || ask "Set up a Railway project?"; then
-    # </dev/null + --ci so this runs unattended (agent/non-TTY); railway.json
-    # supplies build/start. LOVABLE_SETUP_RAILWAY=1 fires it without a prompt.
+    # </dev/null + --ci so this runs unattended (agent/non-TTY).
+    # LOVABLE_SETUP_RAILWAY=1 fires it without a prompt.
     railway init --name "$PROJECT_NAME" </dev/null
+    railway add --service "$PROJECT_NAME" </dev/null
+    railway service link "$PROJECT_NAME" </dev/null
+    # Service config lives in .railway/railway.ts (IaC), not railway.json (dead
+    # 2026-12-01). Pull the live service, pin partial + build/start, apply before
+    # the first deploy. Push does NOT apply it: edits need `railway config plan && railway config apply`.
+    info "Writing .railway/railway.ts..."
+    railway config pull </dev/null >/dev/null
+    PARTIAL="$PROJECT_NAME" perl -0pi -e 's/(from "railway\/iac";\n)/$1\n\/\/ This repo manages only its own service. See .railway\/README.md.\nexport const partial = "$ENV{PARTIAL}";\n/' .railway/railway.ts
+    if [ "$SHAPE" != docker ]; then
+      perl -0pi -e 's/(service\("[^"]+", \{\n)/$1    build: "bun run build",\n    start: "bun run start",\n/' .railway/railway.ts
+    fi
+    railway config apply --yes </dev/null
+    git add .railway package.json bun.lock 2>/dev/null || git add .railway package.json
+    git commit -q -m "Railway: service config as code (.railway/railway.ts)" || true
+    git remote get-url origin >/dev/null 2>&1 && git push -q || true
+    ok ".railway/railway.ts applied"
     info "Deploying..."
     railway up --ci </dev/null 2>&1 || true
     info "Generating domain..."
@@ -585,7 +586,7 @@ if brew_offer railway railway "deploy to Railway"; then
       docker)
         ok "Docker deploy — Railway auto-builds the Dockerfile, no start command needed" ;;
       *)
-        ok "Start command pinned via railway.json (bun run start) — no dashboard step needed" ;;
+        ok "Start command pinned via .railway/railway.ts (bun run start) — no dashboard step needed" ;;
     esac
   fi
 else
@@ -600,7 +601,7 @@ warn "Manual steps (Railway dashboard / OAuth — can't be scripted):"
 echo  "  Push-to-deploy (GitHub → Railway):"
 echo  "    1. railway.com → your project → the service → Settings → Source → Connect Repo"
 echo  "    2. authorize the Railway GitHub App, then pick the repo + branch main"
-[ "$SHAPE" = docker ] && echo "    3. keep Root Directory unset so the root Dockerfile builds" || echo "    3. leave Root Directory empty — railway.json supplies build + start"
+[ "$SHAPE" = docker ] && echo "    3. keep Root Directory unset so the root Dockerfile builds" || echo "    3. leave Root Directory empty — .railway/railway.ts supplies build + start"
 echo  "  Custom domain (optional, e.g. app.yourdomain.com):"
 echo  "    1. service -> Settings -> Networking -> Custom Domain -> enter the subdomain"
 echo  "    2. target port: enter your \$PORT (8080 on Railway = the port the app serves on)"
