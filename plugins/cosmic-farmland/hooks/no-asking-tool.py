@@ -29,12 +29,11 @@ def main():
         return 0
 
     tool_input = payload.get("tool_input", {})
-    question = tool_input.get("question", "") if isinstance(tool_input, dict) else ""
-    options = ""
-    if isinstance(tool_input, dict):
-        opts = tool_input.get("options", []) or []
-        if isinstance(opts, list):
-            options = " ".join(o.get("label", "") if isinstance(o, dict) else str(o) for o in opts)
+    # tool_input is {"questions": [{"question", "options": [{"label", ...}]}]}
+    qs = tool_input.get("questions", []) if isinstance(tool_input, dict) else []
+    qs = [q for q in qs if isinstance(q, dict)]
+    question = " | ".join(q.get("question", "") for q in qs)
+    options = " ".join(o.get("label", "") for q in qs for o in q.get("options", []) if isinstance(o, dict))
     blob = (question + " " + options).lower()
 
     if any(kw in blob for kw in SAFE_CONTEXT):
