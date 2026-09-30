@@ -27,6 +27,7 @@ import json
 import re
 import sys
 import os
+import subprocess
 from datetime import datetime, timezone
 
 from _transcript import PATCH_ONLY, read_last_assistant_text
@@ -148,6 +149,42 @@ CONTEXT_WHITELIST = [
 ]
 
 
+# Laya second stage: the regex proposes, a local Laya judgment decides. The
+# whitelist above keeps growing because "forward-looking vs measured" is a
+# judgment call; audit 2026-09-30 found ~1 real estimate in 27 post-fix fires.
+# Tuned in ~/code/laya-play/hook_tune.py time_estimate (te_evals.jsonl): 0.97 holdout accuracy
+# vs 0.58 for the naive question. Fails open to regex-only if laya-play is
+# missing, errors, or is slow.
+LAYA_PY = os.path.expanduser("~/code/laya-play/.venv/bin/python")
+LAYA_JUDGE = os.path.expanduser("~/code/laya-play/judge.py")
+LAYA_Q = "Is the speaker estimating the effort or time needed for upcoming work?"
+LAYA_FRAME = "Sentence from a status update: {}"
+LAYA_T = 0.25
+
+
+def sentence_at(text: str, start: int, end: int) -> str:
+    """The sentence (or line) containing text[start:end]."""
+    left = max(text.rfind(c, 0, start) for c in (". ", "! ", "? ", "\n")) + 1
+    ends = [i for i in (text.find(c, end) for c in (". ", "! ", "? ", "\n")) if i != -1]
+    return text[left:min(ends) + 1 if ends else len(text)].strip()
+
+
+def laya_scores(sentences):
+    """Laya P(estimate) per sentence, or None to fall back to regex-only."""
+    if not os.path.exists(LAYA_PY) or not os.path.exists(LAYA_JUDGE):
+        return None
+    try:
+        out = subprocess.run(
+            [LAYA_PY, LAYA_JUDGE],
+            input=json.dumps({"question": LAYA_Q, "frame": LAYA_FRAME, "texts": sentences}),
+            capture_output=True, text=True, timeout=3.5,
+        )
+        scores = json.loads(out.stdout)
+        return scores if len(scores) == len(sentences) else None
+    except Exception:
+        return None
+
+
 def is_data_context(text: str, match_start: int, match_end: int) -> bool:
     """Check ~40 chars around match for data-context whitelist phrases."""
     left = max(0, match_start - 40)
@@ -171,11 +208,31 @@ def main():
         return 0
 
     scrubbed = strip_safe_zones(last_text)
-    matches = []
-    for m in TIME_PATTERN.finditer(scrubbed):
-        if is_data_context(scrubbed, m.start(), m.end()):
-            continue
-        matches.append(m.group(0))
+    candidates = [
+        (m.group(0), sentence_at(scrubbed, m.start(), m.end()))
+        for m in TIME_PATTERN.finditer(scrubbed)
+        if not is_data_context(scrubbed, m.start(), m.end())
+    ]
+    if not candidates:
+        return 0
+
+    scores = laya_scores([sent for _, sent in candidates])
+    if scores is not None:
+        cleared = [(c, p) for c, p in zip(candidates, scores) if p < LAYA_T]
+        candidates = [c for c, p in zip(candidates, scores) if p >= LAYA_T]
+        if cleared:
+            # Every Laya call is future eval data for laya-play/te_evals.jsonl.
+            try:
+                with open(os.path.expanduser("~/.claude/cc-friction-log.jsonl"), "a") as f:
+                    f.write(json.dumps({
+                        "ts": datetime.now(timezone.utc).isoformat(),
+                        "session_id": payload.get("session_id"),
+                        "type": "time_estimate_laya_cleared",
+                        "cleared": [{"match": m, "sentence": s, "p": p} for (m, s), p in cleared],
+                    }) + "\n")
+            except Exception:
+                pass
+    matches = [m for m, _ in candidates]
 
     if not matches:
         return 0
@@ -189,6 +246,8 @@ def main():
                 "session_id": payload.get("session_id"),
                 "type": "time_estimate",
                 "matches": matches,
+                "sentences": [sent for _, sent in candidates],
+                "laya": scores is not None,
                 "snippet": last_text[-400:],
             }) + "\n")
     except Exception:
@@ -247,6 +306,9 @@ def selftest():
         assert _violations(t), f"expected a hit: {t!r}"
     for t in should_pass:
         assert not _violations(t), f"false positive: {t!r} -> {_violations(t)}"
+    t = "Done. This will take 2 days. Data is stale."
+    i = t.index("2 days")
+    assert sentence_at(t, i, i + 6) == "This will take 2 days.", sentence_at(t, i, i + 6)
     print("selftest ok")
 
 
