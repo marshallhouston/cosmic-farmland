@@ -152,7 +152,7 @@ CONTEXT_WHITELIST = [
 # Laya second stage: the regex proposes, a local Laya judgment decides. The
 # whitelist above keeps growing because "forward-looking vs measured" is a
 # judgment call; audit 2026-09-30 found ~1 real estimate in 27 post-fix fires.
-# Tuned in ~/code/laya-play/te_tune.py (te_evals.jsonl): 0.97 holdout accuracy
+# Tuned in ~/code/laya-play/hook_tune.py time_estimate (te_evals.jsonl): 0.97 holdout accuracy
 # vs 0.58 for the naive question. Fails open to regex-only if laya-play is
 # missing, errors, or is slow.
 LAYA_PY = os.path.expanduser("~/code/laya-play/.venv/bin/python")
