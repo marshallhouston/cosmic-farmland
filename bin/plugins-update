@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Update every Claude Code marketplace and installed plugin.
+# Pulls each marketplace checkout with git directly, because
+# `claude plugin marketplace update` fails on this machine with
+# "git clone exited with code 1 (no stderr output)".
+#
+#   plugins-update
+set -uo pipefail
+
+PLUGINS="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins"
+
+jq -r 'to_entries[] | "\(.key)\t\(.value.installLocation)"' "$PLUGINS/known_marketplaces.json" |
+  while IFS=$'\t' read -r name dir; do
+    [ -d "$dir/.git" ] || continue   # non-git marketplaces (claude-plugins-official) update themselves
+    if git -C "$dir" pull -q --ff-only 2>/dev/null; then
+      echo "pulled  $name"
+    else
+      echo "FAILED  $name ($dir)" >&2
+    fi
+  done
+
+jq -r '.plugins | keys[]' "$PLUGINS/installed_plugins.json" |
+  while read -r plugin; do
+    claude plugin update "$plugin" </dev/null 2>&1 | tail -1 | sed 's/ Warning: marketplace not refreshed.*//'
+  done
