@@ -59,9 +59,9 @@ Append this block to every handoff prompt so the fresh session verifies state be
 ```
 Before first action, verify:
 - Referenced files exist at the committed SHA named above.
-- cwd matches the worktree path stated above.
-- Current branch matches.
+- The worktree path stated above exists, on the stated branch, at the stated SHA (`git -C <path> ...`).
 If any check fails, stop and report -- do not guess or re-discover.
+If only cwd differs (session opened in the primary checkout), do not stop: work against the worktree by absolute path.
 ```
 
 ## How to generate the prompt
