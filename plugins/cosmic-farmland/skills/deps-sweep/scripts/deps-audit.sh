@@ -79,8 +79,13 @@ bucket_for() {
   cm=$(major "$current"); lm=$(major "$latest")
   if [ -n "$cm" ] && [ -n "$lm" ] && [ "$lm" -gt "$cm" ]; then
     echo majors
+  elif is_exact "$s" && [ "$current" != "$latest" ]; then
+    # bun sometimes reports update == latest for an exact pin, which read as
+    # safe and `bun update` then left it untouched. (why: preach-hub
+    # 2026-10-19, @capacitor/cli and /ios sat in SAFE BATCH and never moved.)
+    echo pinned
   elif [ "$update" != "$latest" ]; then
-    if is_exact "$s"; then echo pinned; else echo held; fi
+    echo held
   else
     echo safe
   fi
@@ -101,6 +106,8 @@ self_test() {
   check majors 6.0.3 6.0.3 7.0.2 '6.0.3'    'exact-pinned major'
   # Within-major, pin holds it back -> edit the pin.
   check pinned 2.14.0 2.14.0 2.19.0 '2.14.0' 'exact-pinned minor'
+  # bun can claim update == latest on an exact pin; still a pin-edit, not safe.
+  check pinned 8.5.2 8.5.3 8.5.3 '8.5.2'   'exact-pinned, bun reports update'
   # Within-major, range holds it back -> genuine peer block.
   check held   1.2.0 1.2.0 1.9.0 '^1.2.0'   'peer-held minor'
   # Nothing in the way.
