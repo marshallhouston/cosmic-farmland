@@ -17,11 +17,10 @@ loop.
 ### 1. Find open PRs you authored
 
 ```bash
-gh pr list --author "@me" --state open --json number,title,headRefName,url \
-  --jq '.[] | "\(.number)\t\(.title)\t\(.headRefName)"'
+${CLAUDE_PLUGIN_ROOT}/scripts/pr-state.sh --mine
 ```
 
-Sort by PR number ascending (oldest first). Print to user as a numbered list.
+Prints `<number>\t<branch>\t<title>`, oldest first. Print to user as a numbered list.
 
 ### 2. Confirmation menu (single confirmation, not per-PR)
 
@@ -59,15 +58,15 @@ For each selected PR:
 
 ### 4. Summary
 
-Print final tally:
+One line per PR, so "were these shipped?" never needs asking:
 ```
-Shipped: N
-Blocked: M (#123 yellow, #124 red)
-Failed:  K (#125 - merge conflict)
+#123  merged    a1b2c3d  deploy verified
+#124  blocked   yellow: migration adds a column (deploy-gap) -> /ship 124 --ack-yellow
+#125  failed    merge conflict in src/foo.ts
 ```
 
-For blocked PRs, include the gate reason inline. User can re-invoke with
-`--ack-yellow` / `--ack-red` if intentional.
+A blocked line names the dimension that drove the tier and the exact command
+to pass the gate, so "why do these need me?" is answered in the line.
 
 ## Don't
 
