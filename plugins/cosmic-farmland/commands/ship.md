@@ -21,8 +21,8 @@ If not, stop and tell the user.
 
 1. **Resolve PR.** `$ARGUMENTS` starts with a number → use it. Else `gh pr view --json number -q .number`. Neither works → stop.
 
-2. **Risk gate (skip entirely if the repo has no `risk:*` classifier).** Read the tier: `gh pr view <pr> --json labels --jq '.labels[].name' | grep '^risk:' | grep -v '^risk:override-' | head -1`.
-   - First, **freshness**: compare PR head SHA to `scored_sha=` in the latest `<!-- risk-score: ... -->` comment. Mismatch/missing → auto-invoke `/risk-score <pr>`, then re-read. A label from a stale commit is not trusted.
+2. **Risk gate (skip entirely if the repo has no `risk:*` classifier).** Read state with `${CLAUDE_PLUGIN_ROOT}/scripts/pr-state.sh <pr>` (one `key=value` line: `tier=`, `fresh=`, `state=`, `mergeable=`, `merge_state=`). Never hand-roll `gh --jq` with `\(...)` interpolation: the worktree sandbox refuses it.
+   - First, **freshness**: `fresh=no` or `fresh=unscored` → auto-invoke `/risk-score <pr>`, then re-read. A label from a stale commit is not trusted.
    - `risk:green` → proceed silently. `risk:blue` → proceed, note tier in report.
    - `risk:yellow` / `risk:red` → STOP, print the reason from the classifier comment, require `--ack-yellow` / `--ack-red` in `$ARGUMENTS` to proceed (log the ack in the report + step 4a).
    - `risk:needs-scoring` or no label (in a classifier repo) → auto-invoke `/risk-score <pr>` once, re-read, resume. Still missing → STOP, tell user to inspect the classifier run.
@@ -36,9 +36,9 @@ If not, stop and tell the user.
    - `closed` → stop. `TIMEOUT` (20 min hard cap) → report what's pending, stop.
    - Never `gh pr checks --watch` (blocks on the slowest check, no liveness output).
 
-3a. **Investigate every failure automatically — never punt.** Pull the log (`gh run view --job <job-id> --log-failed`), name the root cause in one sentence (code / infra / flake / config / secret / upstream). Then check if it actually blocks: `gh pr view <pr> --json mergeable,mergeStateStatus`. If `MERGEABLE` and the failed check is non-required (common on private repos), it's cosmetic — continue to step 4, note it in the report. If it's a real blocker: code issue → report file/line + fix, stop; infra/billing/upstream → report cause + affected workflow + remediation, stop; flake → `gh run rerun <run-id> --failed` once, back to step 3 (fails again = not a flake).
+3a. **Investigate every failure automatically — never punt.** Pull the log (`gh run view --job <job-id> --log-failed`), name the root cause in one sentence (code / infra / flake / config / secret / upstream). Then check if it actually blocks: `pr-state.sh <pr>`. If `MERGEABLE` and the failed check is non-required (common on private repos), it's cosmetic — continue to step 4, note it in the report. If it's a real blocker: code issue → report file/line + fix, stop; infra/billing/upstream → report cause + affected workflow + remediation, stop; flake → `gh run rerun <run-id> --failed` once, back to step 3 (fails again = not a flake).
 
-4. **Verify mergeable.** `gh pr view <pr> --json state,mergeable,mergeStateStatus` → require `OPEN` / `MERGEABLE` / `CLEAN`. Else report and stop.
+4. **Verify mergeable.** Re-run `pr-state.sh <pr>` → require `OPEN` / `MERGEABLE` / `CLEAN`. Else report and stop.
 
 4a. **Log ack** (only if past a yellow/red gate): `gh pr comment <pr> --body "Shipped with \`--ack-<tier>\` override by @$(gh api user --jq .login) at $(date -u +%Y-%m-%dT%H:%M:%SZ). Classifier tier: <tier>."`
 
