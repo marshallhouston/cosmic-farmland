@@ -159,7 +159,10 @@ LAYA_PY = os.path.expanduser("~/code/laya-play/.venv/bin/python")
 LAYA_JUDGE = os.path.expanduser("~/code/laya-play/judge.py")
 LAYA_Q = "Is the speaker estimating the effort or time needed for upcoming work?"
 LAYA_FRAME = "Sentence from a status update: {}"
-LAYA_T = 0.25
+# 0.25 -> 0.45 on 2026-10-19: 11 of 11 fires since 2026-10-03 were stated facts
+# ("session lasts about 60 minutes", "one 5xx in 4 weeks"), 8 scored 0.27-0.39.
+# te_evals: 0.45 catches 20/23 estimates (was 21/23), false fires unchanged.
+LAYA_T = 0.45
 
 
 def sentence_at(text: str, start: int, end: int) -> str:
