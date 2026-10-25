@@ -179,9 +179,13 @@ if [ "$SHAPE" = tanstack-ssr ]; then
 // handler that does NOT listen on a port. This shim wraps it with Bun.serve,
 // serves hashed client assets from dist/client, and listens on $PORT.
 // Start: bun server-entry.ts   (Railway start command: bun run start)
-const ENTRY = (await Bun.file("./dist/server/server.js").exists())
-  ? "./dist/server/server.js"
-  : "./.output/server/index.mjs"; // fallback if a future build emits a nitro layout
+// Fail at boot, not per request: a crashed deploy keeps the previous one live on Railway.
+// (Do not fall back to .output/: @lovable.dev/vite-tanstack-config >=2.26 emits a
+// Cloudflare nitro handler there that 500s every request under Bun. Set `nitro: false`.)
+const ENTRY = "./dist/server/server.js";
+if (!(await Bun.file(ENTRY).exists())) {
+  throw new Error(`${ENTRY} missing: set \`nitro: false\` in vite.config.ts and rebuild`);
+}
 const mod = await import(ENTRY);
 const app = (mod.default ?? mod) as {
   fetch: (req: Request, env: unknown, ctx: unknown) => Response | Promise<Response>;
@@ -414,7 +418,7 @@ if [ "$SHAPE" = tanstack-ssr ] && grep -q '@lovable.dev/vite-tanstack-config' pa
 // vite.config.ts — plain TanStack Start + Vite (de-branded from
 // @lovable.dev/vite-tanstack-config). Dropped: componentTagger (Lovable editor hook),
 // dev error-loggers, hmr-gate, dev-server-bridge, sandbox port-pinning, and the
-// nitro cloudflare deploy plugin (skipped outside a Lovable sandbox anyway).
+// nitro cloudflare deploy plugin (wrapper >=2.26 runs it on every build; it breaks the bun shim).
 // Build emits dist/client + dist/server/server.js (a Web fetch handler) — run it
 // with the bun-serve shim (server-entry.ts). VITE_* env vars are auto-exposed by Vite.
 import { defineConfig } from "vite";
@@ -470,7 +474,13 @@ PLAINVITE
       warn "Plain-config build failed — restored @lovable.dev wrapper. Replace by hand for a clean break."
     fi
   else
-    ok "Kept @lovable.dev wrapper (shim deploys its output regardless)"
+    ok "Kept @lovable.dev wrapper"
+  fi
+  # Wrapper still in place: its nitro step builds for Cloudflare, which the bun shim can't run.
+  if grep -q '@lovable.dev/vite-tanstack-config' vite.config.ts && ! grep -q 'nitro:' vite.config.ts; then
+    perl -0pi -e 's/export default defineConfig\(\{\n/export default defineConfig({\n  \/\/ Railway runs dist\/server\/server.js under Bun (server-entry.ts); nitro defaults to a Cloudflare build.\n  nitro: false,\n/' vite.config.ts
+    grep -q 'nitro: false' vite.config.ts && ok "Set nitro: false (bun shim needs dist/server/server.js)" \
+      || warn "Could not add nitro: false to vite.config.ts — add it by hand or SSR will fail to boot"
   fi
 fi
 
