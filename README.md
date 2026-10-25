@@ -6,7 +6,8 @@ Cross-project scripts and Claude Code plugins for my dev workflow.
 
 - `bin/` -- standalone shell scripts (e.g. `lovable-setup`: de-brand + configure a fresh
   Lovable export -- tests, deps, tokensave, GitHub + Railway; `bun`: a compatibility shim
-  that fixes `bun run`/bunx git hooks under lapdog's injected `BUN_OPTIONS=--preload`).
+  that fixes `bun run`/bunx git hooks under lapdog's injected `BUN_OPTIONS=--preload`;
+  `deploy-drift`: flags repos whose Railway prod deploy is behind `main`).
   Symlink them onto PATH with `bash bin/install.sh`.
 - `plugins/cosmic-farmland/` - core dev loop: ship, PTV audits, what's-next, handoff, deps sweeps, plus the Stop/PreToolUse hooks that enforce house style
 - `plugins/cosmic-farmland-content/` - content and review workflows: feedback pages, interactive review docs, carousels, Granola sync. Enable when writing, not while coding
