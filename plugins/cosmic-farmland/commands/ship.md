@@ -30,13 +30,16 @@ If not, stop and tell the user.
 
 3. **Poll until green — background, not foreground.** Run `${CLAUDE_PLUGIN_ROOT}/scripts/ship-poll.sh <pr>` with `run_in_background: true`. It **self-exits** the instant the PR reaches a terminal-for-ship state, emitting one heartbeat per tick and a final verdict token on its last line; the background task then re-invokes you with that output — the verdict token is the **final** line (the JSON heartbeat ticks print above it). **Do NOT arm a `tail -F | grep` Monitor on it** — a perpetual Monitor never self-exits and lingers on the statusline after the verdict already fired, piling up across back-to-back ships (why: 2026-06-10 — two stale CI-verdict monitors sat armed after their PRs had merged). The background-task completion notification IS the signal. Surface the output-file path so the user can `! tail -f` it. Act on the verdict token:
    - `merged` → auto-merge already fired; skip to step 6.
-   - `READY` / `READY_NO_CHECKS` → break, go to step 4 (manual merge — auto-merge didn't fire or repo has no CI).
+   - `READY` → break, go to step 4 (manual merge — auto-merge didn't fire).
+   - `READY_NO_CHECKS` → break, go to step 3b (CI-less repo: the only evidence is a local gate that ran at push time, so re-run it on the merged tree first).
    - `FAILURE` → step 3a.
    - `STALL` → ship-poll saw no state change for 5 min: a check is hung or the PR is gated outside the rollup (review required, branch protection). Report what's pending + the gate, stop.
    - `closed` → stop. `TIMEOUT` (20 min hard cap) → report what's pending, stop.
    - Never `gh pr checks --watch` (blocks on the slowest check, no liveness output).
 
 3a. **Investigate every failure automatically — never punt.** Pull the log (`gh run view --job <job-id> --log-failed`), name the root cause in one sentence (code / infra / flake / config / secret / upstream). Then check if it actually blocks: `gh pr view <pr> --json mergeable,mergeStateStatus`. If `MERGEABLE` and the failed check is non-required (common on private repos), it's cosmetic — continue to step 4, note it in the report. If it's a real blocker: code issue → report file/line + fix, stop; infra/billing/upstream → report cause + affected workflow + remediation, stop; flake → `gh run rerun <run-id> --failed` once, back to step 3 (fails again = not a flake).
+
+3b. **Re-gate on the merged tree (CI-less repos only, `READY_NO_CHECKS`).** The branch's pre-push gate proved the branch, not the merge result; main has usually moved since. In the PR worktree: `git fetch origin && git merge origin/main`. If it conflicts only on manifest/lockfile (`package.json`, `bun.lock`, `package-lock.json`, `pnpm-lock.yaml`), take main's copies (`git checkout origin/main -- <files>`), reapply the PR's dependency changes (`git diff <merge-base> <pr-head> -- package.json` shows them), run the install, `git add -A`, commit. Any other conflict → report file list and stop. Then run the repo's own gate on the merged tree: `.husky/pre-push` if present, else `lint` + typecheck + `test` scripts from `package.json`. Red → treat as step 3a (name root cause, stop). Green → `git push` (a merge commit, never force), then step 4. Skip the whole step when the merge is a no-op (`Already up to date`). (why: 2026-11-06 — four preach-hub deps PRs each passed pre-push on 2026-11-02, main moved 5 commits, all four conflicted on `package.json`; nothing had tested any of the combined trees and the first place a bad merge would have surfaced was the Railway prod build.)
 
 4. **Verify mergeable.** `gh pr view <pr> --json state,mergeable,mergeStateStatus` → require `OPEN` / `MERGEABLE` / `CLEAN`. Else report and stop.
 
@@ -64,4 +67,4 @@ If not, stop and tell the user.
 
 - **A failing check is a signal, not a dead-end.** There is no "a check failed, want me to look?" — if it failed, look (step 3a). The user invoked `/ship` presupposing failures get investigated.
 - **A running check is not a reason to freeze.** Stream snapshots; the user wants liveness, not suspense.
-- **CI is the authority** — don't re-run tests locally, don't ask for confirmation when gates pass, don't merge over a real failure to "unblock."
+- **CI is the authority** — when it exists, don't re-run tests locally, don't ask for confirmation when gates pass, don't merge over a real failure to "unblock." When it doesn't exist (`READY_NO_CHECKS`), the local gate on the merged tree is the authority (step 3b); a gate that ran on a stale branch is not.

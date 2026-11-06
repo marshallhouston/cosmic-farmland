@@ -12,6 +12,10 @@ encodes the fix.
 - **PR #431 (2026-05-03)** — preach-hub killed GHA (#419), `statusCheckRollup` permanently empty, so the `PASSED>0` branch never matched and it stalled the full 5 min. Fix: 60s grace → READY_NO_CHECKS for CI-less repos.
 - **2026-06-10** — the separate `tail -F | grep` Monitor armed on the poll output never self-exits; two stale CI-verdict monitors lingered on the statusline after their PRs had merged. Fix: ship-poll owns the 5-min no-change stall bail (emits `STALL` + exits) so it self-exits on every verdict; ship.md drops the perpetual Monitor and reads the verdict off the background-task completion notification. Nothing perpetual is armed.
 
+## Re-gate on merged tree (ship.md step 3b)
+
+- **preach-hub #1250/#1251/#1252/#1253 (2026-11-06)** — CI-less repo; each deps PR passed pre-push on 2026-11-02, then main took 5 commits (#1249 safe batch touched the same `package.json` lines). All four were `READY_NO_CHECKS` yet CONFLICTING, and no gate had ever run on any merged tree; the Railway prod build would have been the first test. Fix: on `READY_NO_CHECKS`, merge `origin/main` into the branch, resolve manifest/lockfile conflicts by taking main + reapplying the PR's bumps, run the repo's pre-push gate on the result, push the merge commit, then merge.
+
 ## Prod-verify (ship-verify-deploy.sh)
 
 - **PR #421 (2026-05-01)** — merged green, but prod pre-deploy had been silently failing since #419 (a test-setup guard rejected the mainline DB; PR-preview used switchyard so the gap was invisible). Surfaced only when a user hit an unrelated service. Reason for the step existing at all.
