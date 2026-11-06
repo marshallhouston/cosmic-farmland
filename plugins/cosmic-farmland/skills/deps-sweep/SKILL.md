@@ -62,9 +62,11 @@ Worktree per dep. Before bumping, **grep usage**: `grep -rn "<dep-name>\|<dep-ex
 
 Exact-pinned: edit the pin in package.json to latest, `bun install`, grep usage, verify peers, own PR. (preach-hub #597: `@anthropic-ai/sdk` was exact-pinned, not peer-blocked.) Peer-held: follow-up PR after the core dep lands. Confirm by re-running the audit; the entry should drop to safe-batch on the next pass.
 
-## 6. Ship each
+## 6. Ship now, in this session
 
-`gh pr merge <pr> --squash`, then worktree + branch cleanup. Run the repo's prod check on the post-merge deploy.
+Do not end the sweep with PRs open. Run `/ship-all` as soon as the last PR is up. It drains oldest-first, which is bucket order: safe batch, then pins, then majors. After each merge the next PR conflicts on `package.json` + `bun.lock`; the rebase recipe is in Notes. Run the repo's prod check on the post-merge deploy.
+
+(preach-hub #1250-#1253, 2026-11-06: four deps PRs sat 4 days with no shipper, all went stale, all conflicted. The rot is the gap between open and merge. Close it before leaving the session.)
 
 ## 7. Final
 
